@@ -1,0 +1,54 @@
+# AUST ROBOTICS CLUB — Bootcamp & Room System
+
+Ekta single-file website: `index.html`. Backend = Firebase Realtime Database. Deploy = GitHub + Netlify.
+
+## 1. Repo banaon
+```
+your-repo/
+  index.html
+  assets/
+    varsity-bg.jpg   <- AUST campus er pic
+    logo.png         <- club logo (transparent PNG best)
+    banner.png       <- mentor-der jonno banner (bootcamp apply/login page o mentor dashboard-e dekhabe)
+```
+`assets` folder na thakle o site chalbe, khali background e gradient fallback dekhabe.
+
+## 2. Firebase setup
+1. https://console.firebase.google.com -> Add project
+2. Build -> Realtime Database -> Create Database (test mode diye shuru korte paro)
+3. Project settings (gear icon) -> General -> "Add app" -> Web (</>) -> config object copy koro
+4. `index.html` file er upore, `FIREBASE_CONFIG` object e oi values paste koro
+5. Realtime Database -> Rules tab e eita boshao:
+```json
+{
+  "rules": { ".read": true, ".write": true }
+}
+```
+   Eta simple rule, ei app e Firebase Auth use kora hoyni (ami nijer JS diye password check korchi). Chaile pore Anonymous Auth add kore aro shurokkhito kora jai — pore lagle bolo.
+
+## 3. Admin password
+Default: `092418`. Change korte chaile `index.html` e `ADMIN_PASSWORD` variable ta change koro.
+
+## 4. GitHub e push
+```bash
+git init
+git add .
+git commit -m "AUST Robotics bootcamp system"
+git remote add origin <tomar repo URL>
+git push -u origin main
+```
+
+## 5. Netlify e deploy
+1. https://app.netlify.com -> Add new site -> Import an existing project -> GitHub theke repo select koro
+2. Build command: (khali rakho — kichu lagbe na)
+3. Publish directory: `/` (root)
+4. Deploy
+
+Bas hoye gelo — tomar dewa URL e site live thakbe.
+
+## Kaj kore ki kore (short)
+- **Master Admin** (password diye login): Bootcamp add/delete, room + time slot add/delete, room-er live schedule directly edit, mentor approve/edit/kick/manual-add, mentor-der pathano room-update request approve/reject.
+- **Public visitor**: bootcamp select kore "Apply as Mentor" (name/phone/password) othoba "Mentor Login".
+- **Approved Mentor**: login korle "Room Check" (kono din + shomoy select kore faka room khoja) ar "Room Data Update" (room + din select kore time slot mark kore save — eta admin approve na kora porjonto live hoy na) — duita option pabe.
+
+Shob kichu real-time — Firebase e data change hoile shob user-er screen auto-update hoy.
