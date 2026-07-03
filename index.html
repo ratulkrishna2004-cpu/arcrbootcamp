@@ -407,6 +407,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
   background:rgba(255,176,32,0.08); border:1px solid rgba(255,176,32,0.35); color:#ffd899;
   font-family:var(--font-mono); font-size:12px; padding:14px 18px; border-radius:10px; margin:0 auto 22px; max-width:1180px;
 }
+
+/* room search dropdown — light green bg, golden text for clear visibility */
+#mu-room{
+  background:rgba(61,220,132,0.14);
+  color:var(--amber);
+  border-color:rgba(61,220,132,0.4);
+  font-weight:700;
+}
+#mu-room option{
+  background:#0b1a12;
+  color:var(--amber);
+}
 </style>
 </head>
 <body>
@@ -627,6 +639,7 @@ function topbar(){
     rightBtns.push(`<button class="btn purple sm" onclick="app_logoutMentor()">LOGOUT MENTOR</button>`);
   }
   if(state.adminAuthed){
+    rightBtns.push(`<button class="btn ghost sm" onclick="navigate('adminDashboard',{adminTab:'bootcamps', adminBootcampView:null, adminScheduleRoom:null})">DASHBOARD</button>`);
     rightBtns.push(`<button class="btn danger sm" onclick="app_logoutAdmin()">LOGOUT ADMIN</button>`);
   }
   if(!state.adminAuthed){
@@ -702,7 +715,18 @@ function renderBootcampPublic(){
         <h3 style="font-family:var(--font-display); font-size:16px; margin-bottom:8px;">Mentor Login</h3>
         <p style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">Already approved? Log in with your phone &amp; password to manage rooms.</p>
       </div>
-    </div>`;
+    </div>
+    ${(state.mentor && state.mentor.bootcampId === state.currentBootcampId) ? `
+    <div class="card" style="cursor:pointer; margin-top:18px; text-align:center;" onclick="navigate('mentorDashboard',{mentorTab:'check', mentorCheckSlots:{}})">
+      <h3 style="font-family:var(--font-display); font-size:16px; color:var(--green);">Enter — Logged in as ${esc(state.mentor.name)}</h3>
+      <p style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">You're already logged in as a mentor for this bootcamp. Tap to go straight to Room Search.</p>
+    </div>` : ``}
+    ${state.adminAuthed ? `
+    <div class="card" style="cursor:pointer; margin-top:18px; text-align:center;" onclick="navigate('adminDashboard',{adminTab:'bootcamps', adminBootcampView:'${state.currentBootcampId}'})">
+      <h3 style="font-family:var(--font-display); font-size:16px; color:var(--cyan);">Enter — Master Admin</h3>
+      <p style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">You're logged in as admin. Tap to manage this bootcamp.</p>
+    </div>` : ``}
+    `;
 
   if(mode === "apply"){
     body = `
@@ -1100,13 +1124,21 @@ function app_toggleCheckSlot(sid, el){
   if(state.mentorCheckSlots[sid]) delete state.mentorCheckSlots[sid];
   else state.mentorCheckSlots[sid] = true;
   el.classList.toggle("checked", !!state.mentorCheckSlots[sid]);
+  app_searchRooms();
 }
 function app_searchRooms(){
+  if(!state.mentor) return;
   const b = state.bootcamps[state.mentor.bootcampId];
+  if(!b) return;
   const day = state.mentorCheckDay;
   const selected = Object.keys(state.mentorCheckSlots);
   const resultsEl = document.getElementById("check-results");
-  if(!selected.length){ toast("Select at least one time slot", "err"); return; }
+  if(!resultsEl) return;
+
+  if(!selected.length){
+    resultsEl.innerHTML = `<div class="empty">Select one or more time slots above to see available rooms.</div>`;
+    return;
+  }
 
   const rooms = entries(b.rooms);
   const matches = [];
@@ -1199,6 +1231,9 @@ function render(){
     default: content = renderHome();
   }
   app.innerHTML = content + footer();
+  if(state.view === "mentorDashboard" && state.mentorTab === "check"){
+    app_searchRooms();
+  }
 }
 
 
