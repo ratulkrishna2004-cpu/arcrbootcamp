@@ -327,15 +327,20 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
 .toast.ok{border-color:rgba(61,220,132,0.5); color:#8ef2b8;}
 @keyframes slideIn{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
 
-/* ---------- banner ---------- */
-
+/* ---------- banner (mobile only, original ratio) ---------- */
+.banner-frame{
+  display:none;
+  width:100%; border-radius:16px; overflow:hidden; margin-bottom:26px;
+  border:1px solid var(--border);
+  box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);
+}
+.banner-frame img{width:100%; display:block; height:auto;}
 .banner-frame::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(180deg, rgba(0,229,255,0.08) 0%, transparent 30%, transparent 70%, rgba(2,3,5,0.5) 100%);
 }
-@keyframes bannerGlow{
-  0%,100%{box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);}
-  50%{box-shadow:0 0 0 1px rgba(0,229,255,0.15), 0 0 48px rgba(0,229,255,0.34), 0 0 90px rgba(167,66,255,0.22);}
+@media(max-width:768px){
+  .banner-frame{ display:block; }
 }
 
 /* ---------- glossy / neon upgrades ---------- */
@@ -1054,6 +1059,7 @@ function renderMentorDashboard(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb">${esc(b.name)} / Mentor: ${esc(state.mentor.name)}</div>
+    ${bannerBlock()}
     <div class="section-title">Mentor Dashboard</div>
     <div class="tabs">
       ${tabs.map(([k,l])=>`<button class="tab-btn ${state.mentorTab===k?'active':''}" onclick="navigate('mentorDashboard',{mentorTab:'${k}', mentorCheckSlots:{}})">${l}</button>`).join("")}
