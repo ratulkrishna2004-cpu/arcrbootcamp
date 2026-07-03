@@ -328,17 +328,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
 @keyframes slideIn{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
 
 /* ---------- banner ---------- */
-.banner-frame{
-  position:sticky; top:74px; z-index:15;
-  width:100%; border-radius:16px; overflow:hidden; margin-bottom:26px;
-  border:1px solid var(--border);
-  box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);
-  animation:bannerGlow 4s ease-in-out infinite;
-  transition:max-height .35s ease, box-shadow .35s ease;
-  max-height:600px;
-}
-.banner-frame img{width:100%; display:block; height:auto; object-fit:contain;}
-.banner-frame.shutter{max-height:64px; box-shadow:0 0 0 1px rgba(0,229,255,0.15), 0 6px 20px rgba(0,0,0,0.4);}
+
 .banner-frame::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(180deg, rgba(0,229,255,0.08) 0%, transparent 30%, transparent 70%, rgba(2,3,5,0.5) 100%);
@@ -454,6 +444,7 @@ const db = fbReady ? firebase.database() : null;
 const state = {
   view: "home",              // home | bootcampPublic | adminLogin | adminDashboard | mentorDashboard
   bootcamps: {},              // live cache from firebase
+  template: { rooms:{}, timeSlots:{} },  // reusable rooms & slots across bootcamps
   currentBootcampId: null,
   adminAuthed: localStorage.getItem("arc_admin") === "1",
   adminTab: "bootcamps",      // bootcamps | mentors | roomRequests
@@ -511,6 +502,10 @@ if(fbReady){
     state.bootcamps = snap.val() || {};
     render();
   });
+  db.ref("template").on("value", snap=>{
+    state.template = snap.val() || { rooms:{}, timeSlots:{} };
+    render();
+  });
 }
 
 /* ============================================================================
@@ -518,8 +513,14 @@ if(fbReady){
    ============================================================================ */
 function addBootcamp(name, sessions){
   const id = uid();
-  db.ref("bootcamps/"+id).set({ name, sessions: sessions || "", createdAt: Date.now(), rooms:{}, timeSlots:{}, schedule:{}, mentorRequests:{}, roomRequests:{} });
-  toast("Bootcamp created", "ok");
+  const templateRooms = state.template.rooms || {};
+  const templateSlots = state.template.timeSlots || {};
+  db.ref("bootcamps/"+id).set({
+    name, sessions: sessions || "", createdAt: Date.now(),
+    rooms: templateRooms, timeSlots: templateSlots,
+    schedule:{}, mentorRequests:{}, roomRequests:{}
+  });
+  toast("Bootcamp created — rooms & time slots auto-loaded", "ok");
 }
 function deleteBootcamp(id){
   if(!confirm("Delete this bootcamp and ALL its data (rooms, mentors, schedules)? This cannot be undone.")) return;
@@ -530,23 +531,35 @@ function deleteBootcamp(id){
 function addRoom(bootcampId, name){
   const id = uid();
   db.ref(`bootcamps/${bootcampId}/rooms/${id}`).set(name);
+  db.ref(`template/rooms/${id}`).set(name);
   toast("Room added", "ok");
 }
 function deleteRoom(bootcampId, roomId){
-  if(!confirm("Delete this room and its schedule?")) return;
+  if(!confirm("Delete this room from THIS bootcamp only? (Room stays in the master list for future bootcamps)")) return;
   db.ref(`bootcamps/${bootcampId}/rooms/${roomId}`).remove();
   db.ref(`bootcamps/${bootcampId}/schedule/${roomId}`).remove();
-  toast("Room deleted", "ok");
+  toast("Room removed from this bootcamp", "ok");
+}
+function deleteRoomPermanently(roomId){
+  if(!confirm("Permanently delete this room from the MASTER template? It will no longer auto-load in future bootcamps.")) return;
+  db.ref(`template/rooms/${roomId}`).remove();
+  toast("Room removed from master template", "ok");
 }
 function addSlot(bootcampId, label){
   const id = uid();
   db.ref(`bootcamps/${bootcampId}/timeSlots/${id}`).set(label);
+  db.ref(`template/timeSlots/${id}`).set(label);
   toast("Time slot added", "ok");
 }
 function deleteSlot(bootcampId, slotId){
-  if(!confirm("Delete this time slot?")) return;
+  if(!confirm("Delete this time slot from THIS bootcamp only? (It stays in the master list for future bootcamps)")) return;
   db.ref(`bootcamps/${bootcampId}/timeSlots/${slotId}`).remove();
-  toast("Time slot deleted", "ok");
+  toast("Time slot removed from this bootcamp", "ok");
+}
+function deleteSlotPermanently(slotId){
+  if(!confirm("Permanently delete this time slot from the MASTER template? It will no longer auto-load in future bootcamps.")) return;
+  db.ref(`template/timeSlots/${slotId}`).remove();
+  toast("Time slot removed from master template", "ok");
 }
 function applyMentor(bootcampId, name, phone, password){
   const id = uid();
@@ -714,7 +727,6 @@ function renderBootcampPublic(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb"><a onclick="navigate('home')">Home</a> / ${esc(b.name)}</div>
-    ${bannerBlock()}
     <div class="section-title">${esc(b.name)}</div>
     ${body}
   </div>`;
@@ -863,7 +875,8 @@ function renderAdminBootcampDetail(){
             <div class="info"><b>${esc(rname)}</b></div>
             <div class="actions">
               <button class="btn sm" onclick="navigate('adminDashboard',{adminScheduleRoom:{bootcampId:'${id}',roomId:'${rid}'}, adminScheduleDay:'${DAYS[0]}'})">Manage Schedule</button>
-              <button class="btn danger sm" onclick="deleteRoom('${id}','${rid}')">Delete</button>
+              <button class="btn danger sm" onclick="deleteRoom('${id}','${rid}')">Remove Here</button>
+              <button class="btn danger sm" onclick="deleteRoomPermanently('${rid}')">Delete Forever</button>
             </div>
           </div>`).join("") : `<div class="empty">No rooms yet.</div>`}
       </div>
@@ -877,7 +890,10 @@ function renderAdminBootcampDetail(){
         ${slots.length ? slots.map(([sid,sname])=>`
           <div class="list-item">
             <div class="info"><b>${esc(sname)}</b></div>
-            <div class="actions"><button class="btn danger sm" onclick="deleteSlot('${id}','${sid}')">Delete</button></div>
+            <div class="actions">
+              <button class="btn danger sm" onclick="deleteSlot('${id}','${sid}')">Remove Here</button>
+              <button class="btn danger sm" onclick="deleteSlotPermanently('${sid}')">Delete Forever</button>
+            </div>
           </div>`).join("") : `<div class="empty">No time slots yet.</div>`}
       </div>
     </div>
@@ -1038,7 +1054,6 @@ function renderMentorDashboard(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb">${esc(b.name)} / Mentor: ${esc(state.mentor.name)}</div>
-    ${bannerBlock()}
     <div class="section-title">Mentor Dashboard</div>
     <div class="tabs">
       ${tabs.map(([k,l])=>`<button class="tab-btn ${state.mentorTab===k?'active':''}" onclick="navigate('mentorDashboard',{mentorTab:'${k}', mentorCheckSlots:{}})">${l}</button>`).join("")}
@@ -1178,16 +1193,7 @@ function render(){
   }
   app.innerHTML = content + footer();
 }
-/* shutter effect on scroll for banner */
-window.addEventListener("scroll", ()=>{
-  const bf = document.getElementById("banner-frame");
-  if(!bf) return;
-  if(window.scrollY > 40){
-    bf.classList.add("shutter");
-  } else {
-    bf.classList.remove("shutter");
-  }
-});
+
 
 /* boot */
 if(state.mentor) state.view = "mentorDashboard";
