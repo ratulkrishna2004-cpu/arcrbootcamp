@@ -25,11 +25,12 @@
        Auth (e.g. Anonymous Auth) and rewrite the rules — ask Claude if you
        want help with that upgrade.
 
-  2. ASSETS (put these in your GitHub repo, same folder as this file)
-       assets/varsity-bg.jpg   -> background photo of AUST campus
-       assets/logo.png         -> AUST Robotics Club logo (transparent PNG)
-       assets/banner.png       -> banner shown to mentors on the bootcamp/apply
-                                   page and on the mentor dashboard
+  2. ASSETS (put these in your GitHub repo, SAME FOLDER as this index.html —
+     no subfolder needed)
+       varsity-bg.jpg   -> background photo of AUST campus
+       logo.png         -> AUST Robotics Club logo (transparent PNG)
+       banner.png       -> banner shown to mentors on the bootcamp/apply
+                            page and on the mentor dashboard
      If they're missing, the page still works (banner just won't show, bg
      falls back to a dark gradient).
 
@@ -92,7 +93,7 @@ body{
   position:fixed; inset:0; z-index:0;
   background:
     linear-gradient(180deg, rgba(2,3,4,0.88) 0%, rgba(2,4,6,0.93) 45%, rgba(3,5,8,0.98) 100%),
-    url('assets/varsity-bg.jpg') center/cover no-repeat,
+    url('varsity-bg.jpg') center/cover no-repeat,
     radial-gradient(ellipse at 30% 20%, #10202b 0%, #05070a 60%);
 }
 #bg-layer::before{
@@ -586,7 +587,7 @@ function topbar(){
   return `
   <div class="topbar">
     <div class="brand" onclick="navigate('home')">
-      <div class="brand-logo"><img src="assets/logo.png" onerror="this.style.display='none'"></div>
+      <div class="brand-logo"><img src="logo.png" onerror="this.style.display='none'"></div>
       <div class="brand-text"><b>${CLUB_NAME}</b><span>Bootcamp &amp; Room System</span></div>
     </div>
     <div class="top-actions">${rightBtns.join("")}</div>
@@ -595,7 +596,7 @@ function topbar(){
 
 function bannerBlock(){
   return `<div class="banner-frame" id="banner-frame">
-    <img src="assets/banner.png" alt="${CLUB_NAME} banner" onerror="this.closest('#banner-frame').style.display='none'">
+    <img src="banner.png" alt="${CLUB_NAME} banner" onerror="this.closest('#banner-frame').style.display='none'">
   </div>`;
 }
 
