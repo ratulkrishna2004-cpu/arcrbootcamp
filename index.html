@@ -1,54 +1,1151 @@
-# AUST ROBOTICS CLUB — Bootcamp & Room System
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUST ROBOTICS CLUB | Bootcamp &amp; Room System</title>
 
-Ekta single-file website: `index.html`. Backend = Firebase Realtime Database. Deploy = GitHub + Netlify.
+<!--
+  ============================================================================
+  AUST ROBOTICS CLUB — Bootcamp & Room Booking System
+  ============================================================================
+  SETUP (read this before deploying):
 
-## 1. Repo banaon
-```
-your-repo/
-  index.html
-  assets/
-    varsity-bg.jpg   <- AUST campus er pic
-    logo.png         <- club logo (transparent PNG best)
-    banner.png       <- mentor-der jonno banner (bootcamp apply/login page o mentor dashboard-e dekhabe)
-```
-`assets` folder na thakle o site chalbe, khali background e gradient fallback dekhabe.
+  1. FIREBASE
+     - Create a Firebase project -> Build -> Realtime Database -> Create DB.
+     - Project settings -> General -> Add a Web App -> copy the config object
+       and paste it into FIREBASE_CONFIG below.
+     - Realtime Database -> Rules -> since this app has no Firebase Auth and
+       does its own password check in JS, use rules like:
+         {
+           "rules": { ".read": true, ".write": true }
+         }
+       This is fine for a small club tool, but anyone with the DB URL can
+       write to it. If you want it locked down harder later, add Firebase
+       Auth (e.g. Anonymous Auth) and rewrite the rules — ask Claude if you
+       want help with that upgrade.
 
-## 2. Firebase setup
-1. https://console.firebase.google.com -> Add project
-2. Build -> Realtime Database -> Create Database (test mode diye shuru korte paro)
-3. Project settings (gear icon) -> General -> "Add app" -> Web (</>) -> config object copy koro
-4. `index.html` file er upore, `FIREBASE_CONFIG` object e oi values paste koro
-5. Realtime Database -> Rules tab e eita boshao:
-```json
-{
-  "rules": { ".read": true, ".write": true }
+  2. ASSETS (put these in your GitHub repo, same folder as this file)
+       assets/varsity-bg.jpg   -> background photo of AUST campus
+       assets/logo.png         -> AUST Robotics Club logo (transparent PNG)
+       assets/banner.png       -> banner shown to mentors on the bootcamp/apply
+                                   page and on the mentor dashboard
+     If they're missing, the page still works (banner just won't show, bg
+     falls back to a dark gradient).
+
+  3. DEPLOY
+     - Push this repo to GitHub.
+     - Netlify -> Add new site -> Import from GitHub -> pick the repo ->
+       Deploy (no build command needed, publish directory = root).
+
+  4. MASTER ADMIN PASSWORD
+     - Set below in ADMIN_PASSWORD. Default is "092418" as requested.
+  ============================================================================
+-->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<style>
+:root{
+  --bg:#05070a;
+  --bg-deep:#020304;
+  --panel:rgba(13,20,26,0.72);
+  --panel-solid:#0b131a;
+  --glass:rgba(255,255,255,0.05);
+  --border:rgba(0,229,255,0.28);
+  --border-soft:rgba(255,255,255,0.09);
+  --cyan:#00e5ff;
+  --cyan-dim:#0aa8c2;
+  --purple:#a742ff;
+  --amber:#ffb020;
+  --green:#3ddc84;
+  --red:#ff5468;
+  --text:#e9f6fb;
+  --text-dim:#8ba3ae;
+  --text-faint:#516670;
+  --radius:14px;
+  --font-display:'Orbitron', sans-serif;
+  --font-mono:'Space Mono', monospace;
+  --font-body:'Inter', sans-serif;
 }
-```
-   Eta simple rule, ei app e Firebase Auth use kora hoyni (ami nijer JS diye password check korchi). Chaile pore Anonymous Auth add kore aro shurokkhito kora jai — pore lagle bolo.
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%;}
+body{
+  font-family:var(--font-body);
+  color:var(--text);
+  background:var(--bg-deep);
+  min-height:100vh;
+  overflow-x:hidden;
+  position:relative;
+}
+::selection{background:var(--cyan); color:#00151a;}
+::-webkit-scrollbar{width:10px;}
+::-webkit-scrollbar-track{background:var(--bg-deep);}
+::-webkit-scrollbar-thumb{background:var(--cyan-dim); border-radius:10px;}
 
-## 3. Admin password
-Default: `092418`. Change korte chaile `index.html` e `ADMIN_PASSWORD` variable ta change koro.
+/* ---------- background layer ---------- */
+#bg-layer{
+  position:fixed; inset:0; z-index:0;
+  background:
+    linear-gradient(180deg, rgba(2,3,4,0.88) 0%, rgba(2,4,6,0.93) 45%, rgba(3,5,8,0.98) 100%),
+    url('assets/varsity-bg.jpg') center/cover no-repeat,
+    radial-gradient(ellipse at 30% 20%, #10202b 0%, #05070a 60%);
+}
+#bg-layer::before{
+  content:'';
+  position:absolute; inset:0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.05) 1px, transparent 1px);
+  background-size:42px 42px;
+  mask-image:radial-gradient(ellipse at 50% 0%, black 0%, transparent 70%);
+  opacity:.6;
+}
+#bg-layer::after{
+  content:'';
+  position:absolute; inset:0;
+  background:radial-gradient(circle at 85% 90%, rgba(167,66,255,0.14), transparent 45%);
+}
 
-## 4. GitHub e push
-```bash
-git init
-git add .
-git commit -m "AUST Robotics bootcamp system"
-git remote add origin <tomar repo URL>
-git push -u origin main
-```
+#app{position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column;}
 
-## 5. Netlify e deploy
-1. https://app.netlify.com -> Add new site -> Import an existing project -> GitHub theke repo select koro
-2. Build command: (khali rakho — kichu lagbe na)
-3. Publish directory: `/` (root)
-4. Deploy
+/* ---------- topbar ---------- */
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 26px;
+  border-bottom:1px solid var(--border-soft);
+  backdrop-filter:blur(10px);
+  background:rgba(5,7,10,0.45);
+  position:sticky; top:0; z-index:20;
+  flex-wrap:wrap; gap:12px;
+}
+.brand{display:flex; align-items:center; gap:12px; cursor:pointer;}
+.brand-logo{
+  width:42px; height:42px; border-radius:10px;
+  background:var(--panel-solid);
+  border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden;
+  box-shadow:0 0 18px rgba(0,229,255,0.25);
+}
+.brand-logo img{width:100%; height:100%; object-fit:cover;}
+.brand-text{display:flex; flex-direction:column; line-height:1.15;}
+.brand-text b{font-family:var(--font-display); font-size:15px; letter-spacing:1.5px; color:var(--text);}
+.brand-text span{font-family:var(--font-mono); font-size:10px; letter-spacing:2px; color:var(--cyan); text-transform:uppercase;}
+.top-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
 
-Bas hoye gelo — tomar dewa URL e site live thakbe.
+/* ---------- buttons ---------- */
+.btn{
+  font-family:var(--font-mono);
+  font-size:12.5px; letter-spacing:.5px;
+  padding:10px 18px;
+  border-radius:9px;
+  border:1px solid var(--border);
+  background:rgba(0,229,255,0.06);
+  color:var(--cyan);
+  cursor:pointer;
+  transition:.18s ease;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.btn:hover{background:rgba(0,229,255,0.16); box-shadow:0 0 16px rgba(0,229,255,0.25); transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.btn.solid{background:var(--cyan); color:#00181d; border-color:var(--cyan); font-weight:700;}
+.btn.solid:hover{background:#37f0ff;}
+.btn.purple{border-color:rgba(167,66,255,0.5); color:#cb93ff; background:rgba(167,66,255,0.08);}
+.btn.purple:hover{background:rgba(167,66,255,0.2); box-shadow:0 0 16px rgba(167,66,255,0.3);}
+.btn.danger{border-color:rgba(255,84,104,0.5); color:#ff8a97; background:rgba(255,84,104,0.08);}
+.btn.danger:hover{background:rgba(255,84,104,0.2); box-shadow:0 0 16px rgba(255,84,104,0.25);}
+.btn.ghost{background:transparent; border-color:var(--border-soft); color:var(--text-dim);}
+.btn.ghost:hover{border-color:var(--border); color:var(--text);}
+.btn.sm{padding:6px 12px; font-size:11px;}
+.btn:disabled{opacity:.4; cursor:not-allowed; transform:none; box-shadow:none;}
 
-## Kaj kore ki kore (short)
-- **Master Admin** (password diye login): Bootcamp add/delete, room + time slot add/delete, room-er live schedule directly edit, mentor approve/edit/kick/manual-add, mentor-der pathano room-update request approve/reject.
-- **Public visitor**: bootcamp select kore "Apply as Mentor" (name/phone/password) othoba "Mentor Login".
-- **Approved Mentor**: login korle "Room Check" (kono din + shomoy select kore faka room khoja) ar "Room Data Update" (room + din select kore time slot mark kore save — eta admin approve na kora porjonto live hoy na) — duita option pabe.
+/* ---------- layout helpers ---------- */
+.container{max-width:1180px; margin:0 auto; padding:34px 22px 70px; width:100%; flex:1;}
+.hero{text-align:center; padding:64px 22px 40px; position:relative;}
+.hero h1{
+  font-family:var(--font-display); font-weight:900;
+  font-size:clamp(28px,5vw,52px);
+  letter-spacing:3px;
+  background:linear-gradient(90deg,#fff,var(--cyan) 55%,var(--purple));
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:0 0 40px rgba(0,229,255,0.15);
+}
+.hero p{font-family:var(--font-mono); color:var(--text-dim); margin-top:12px; font-size:13px; letter-spacing:1px;}
+.eyebrow{
+  display:inline-block; font-family:var(--font-mono); font-size:11px; letter-spacing:3px;
+  color:var(--cyan); text-transform:uppercase; margin-bottom:14px; opacity:.85;
+}
 
-Shob kichu real-time — Firebase e data change hoile shob user-er screen auto-update hoy.
+.section-title{
+  font-family:var(--font-display); font-size:20px; letter-spacing:1.5px;
+  color:var(--text); margin-bottom:18px; display:flex; align-items:center; gap:10px;
+}
+.section-title::before{content:''; width:6px; height:20px; background:linear-gradient(var(--cyan),var(--purple)); border-radius:3px;}
+
+/* PCB-style clipped card */
+.card{
+  background:var(--panel);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius);
+  padding:22px;
+  backdrop-filter:blur(14px);
+  position:relative;
+  clip-path:polygon(0 14px,14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+}
+.card::before{
+  content:''; position:absolute; inset:0;
+  clip-path:polygon(0 14px,14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%);
+  padding:1px; pointer-events:none;
+  background:linear-gradient(135deg, rgba(0,229,255,0.35), transparent 40%, rgba(167,66,255,0.3));
+  -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor; mask-composite:exclude;
+}
+
+.grid{display:grid; gap:18px;}
+.grid.cols-3{grid-template-columns:repeat(3,1fr);}
+.grid.cols-2{grid-template-columns:repeat(2,1fr);}
+@media(max-width:820px){.grid.cols-3,.grid.cols-2{grid-template-columns:1fr;}}
+
+.bootcamp-card{cursor:pointer; transition:.2s;}
+.bootcamp-card:hover{transform:translateY(-3px); border-color:var(--border); box-shadow:0 10px 30px rgba(0,229,255,0.08);}
+.bootcamp-card h3{font-family:var(--font-display); font-size:17px; letter-spacing:.5px; margin-bottom:6px;}
+.bootcamp-card .meta{font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); display:flex; gap:14px; flex-wrap:wrap;}
+.bootcamp-card .meta span{color:var(--cyan);}
+.tag{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--font-mono); font-size:10.5px; letter-spacing:1px;
+  padding:4px 10px; border-radius:20px; text-transform:uppercase;
+  border:1px solid var(--border-soft); color:var(--text-dim);
+}
+.tag.pending{color:var(--amber); border-color:rgba(255,176,32,0.4); background:rgba(255,176,32,0.07);}
+.tag.approved{color:var(--green); border-color:rgba(61,220,132,0.4); background:rgba(61,220,132,0.07);}
+
+.empty{
+  font-family:var(--font-mono); color:var(--text-faint); text-align:center;
+  padding:38px 12px; border:1px dashed var(--border-soft); border-radius:12px; font-size:12.5px;
+}
+
+/* ---------- forms ---------- */
+label{display:block; font-family:var(--font-mono); font-size:11px; letter-spacing:1px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase;}
+input[type=text],input[type=password],input[type=tel],input[type=number],select,textarea{
+  width:100%; padding:11px 13px; border-radius:9px;
+  background:rgba(255,255,255,0.03); border:1px solid var(--border-soft);
+  color:var(--text); font-family:var(--font-body); font-size:14px;
+  outline:none; transition:.15s;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0 0 3px rgba(0,229,255,0.1);}
+.field{margin-bottom:16px;}
+.form-row{display:flex; gap:12px; flex-wrap:wrap;}
+.form-row .field{flex:1; min-width:160px;}
+.form-actions{display:flex; gap:10px; margin-top:6px; flex-wrap:wrap;}
+
+/* ---------- modal ---------- */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(2,3,5,0.72); backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:center; z-index:100; padding:18px;
+}
+.modal{
+  width:100%; max-width:460px; max-height:88vh; overflow-y:auto;
+  background:var(--panel-solid); border:1px solid var(--border);
+  border-radius:16px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+.modal h2{font-family:var(--font-display); font-size:18px; letter-spacing:1px; margin-bottom:18px;}
+.modal-close-row{display:flex; justify-content:flex-end; margin-top:14px;}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex; gap:8px; margin-bottom:22px; flex-wrap:wrap; border-bottom:1px solid var(--border-soft); padding-bottom:14px;}
+.tab-btn{
+  font-family:var(--font-mono); font-size:12px; letter-spacing:1px; text-transform:uppercase;
+  padding:9px 16px; border-radius:8px; border:1px solid transparent; background:transparent;
+  color:var(--text-dim); cursor:pointer; transition:.15s;
+}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--cyan); background:rgba(0,229,255,0.08); border-color:var(--border);}
+
+/* ---------- lists / tables ---------- */
+.list-item{
+  display:flex; align-items:center; justify-content:space-between; gap:14px;
+  padding:14px 16px; border-radius:10px; background:rgba(255,255,255,0.025);
+  border:1px solid var(--border-soft); margin-bottom:10px; flex-wrap:wrap;
+}
+.list-item .info b{font-family:var(--font-body); font-size:14px; display:block; margin-bottom:3px;}
+.list-item .info .sub{font-family:var(--font-mono); font-size:11px; color:var(--text-dim);}
+.list-item .actions{display:flex; gap:8px; flex-wrap:wrap;}
+
+/* ---------- day/slot grid ---------- */
+.day-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:18px;}
+.day-tab{
+  font-family:var(--font-mono); font-size:11.5px; padding:8px 14px; border-radius:20px;
+  border:1px solid var(--border-soft); background:transparent; color:var(--text-dim); cursor:pointer;
+}
+.day-tab.active{background:var(--cyan); color:#00181d; border-color:var(--cyan); font-weight:700;}
+.slot-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px;}
+.slot-chip{
+  display:flex; align-items:center; gap:8px;
+  padding:10px 12px; border-radius:9px; border:1px solid var(--border-soft);
+  background:rgba(255,255,255,0.02); cursor:pointer; font-family:var(--font-mono); font-size:12px;
+  transition:.15s; user-select:none;
+}
+.slot-chip input{accent-color:var(--cyan); width:15px; height:15px;}
+.slot-chip.checked{border-color:var(--cyan); background:rgba(0,229,255,0.1); color:var(--cyan);}
+.slot-chip.locked{opacity:.55;}
+
+/* result cards for room check */
+.result-room{
+  border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:12px;
+  background:rgba(61,220,132,0.04);
+}
+.result-room h4{font-family:var(--font-display); font-size:15px; color:var(--green); margin-bottom:8px;}
+.result-room .slots{display:flex; gap:8px; flex-wrap:wrap;}
+.result-room .slots span{
+  font-family:var(--font-mono); font-size:11px; padding:5px 10px; border-radius:14px;
+  background:rgba(61,220,132,0.12); color:#8ef2b8; border:1px solid rgba(61,220,132,0.3);
+}
+
+/* login card center */
+.center-wrap{display:flex; align-items:center; justify-content:center; min-height:70vh; padding:20px;}
+.auth-card{width:100%; max-width:380px;}
+.auth-card .eyebrow{display:block; text-align:center;}
+.auth-card h2{font-family:var(--font-display); text-align:center; font-size:19px; margin-bottom:22px; letter-spacing:1px;}
+
+/* toast */
+#toast-wrap{position:fixed; bottom:20px; right:20px; z-index:999; display:flex; flex-direction:column; gap:10px;}
+.toast{
+  font-family:var(--font-mono); font-size:12.5px; padding:12px 18px; border-radius:9px;
+  background:var(--panel-solid); border:1px solid var(--border); color:var(--text);
+  box-shadow:0 8px 24px rgba(0,0,0,0.4); animation:slideIn .25s ease;
+  max-width:320px;
+}
+.toast.err{border-color:rgba(255,84,104,0.5); color:#ff8a97;}
+.toast.ok{border-color:rgba(61,220,132,0.5); color:#8ef2b8;}
+@keyframes slideIn{from{opacity:0; transform:translateX(20px);} to{opacity:1; transform:translateX(0);}}
+
+/* ---------- banner ---------- */
+.banner-frame{
+  position:relative; width:100%; border-radius:16px; overflow:hidden; margin-bottom:26px;
+  border:1px solid var(--border);
+  box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);
+  animation:bannerGlow 4s ease-in-out infinite;
+}
+.banner-frame img{width:100%; display:block; max-height:280px; object-fit:cover;}
+.banner-frame::after{
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(180deg, rgba(0,229,255,0.08) 0%, transparent 30%, transparent 70%, rgba(2,3,5,0.5) 100%);
+}
+@keyframes bannerGlow{
+  0%,100%{box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);}
+  50%{box-shadow:0 0 0 1px rgba(0,229,255,0.15), 0 0 48px rgba(0,229,255,0.34), 0 0 90px rgba(167,66,255,0.22);}
+}
+
+/* ---------- glossy / neon upgrades ---------- */
+@keyframes neonPulse{
+  0%,100%{box-shadow:0 0 10px rgba(0,229,255,0.15), inset 0 1px 0 rgba(255,255,255,0.06);}
+  50%{box-shadow:0 0 22px rgba(0,229,255,0.35), inset 0 1px 0 rgba(255,255,255,0.1);}
+}
+@keyframes titleFlicker{
+  0%,19%,21%,23%,80%,100%{opacity:1;}
+  20%,22%{opacity:.82;}
+}
+.brand-logo{animation:neonPulse 3.2s ease-in-out infinite;}
+.hero h1{animation:titleFlicker 6s linear infinite;}
+
+.btn{
+  position:relative; overflow:hidden;
+  background:linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,229,255,0.05));
+  box-shadow:0 1px 0 rgba(255,255,255,0.08) inset, 0 0 0 rgba(0,229,255,0);
+}
+.btn::before{
+  content:''; position:absolute; top:0; left:-60%; width:40%; height:100%;
+  background:linear-gradient(115deg, transparent, rgba(255,255,255,0.35), transparent);
+  transform:skewX(-20deg); transition:left .55s ease;
+}
+.btn:hover::before{left:130%;}
+.btn:hover{box-shadow:0 0 18px rgba(0,229,255,0.35), 0 2px 0 rgba(255,255,255,0.05) inset;}
+.btn.solid{
+  background:linear-gradient(180deg,#4df3ff,var(--cyan) 55%,#00c2dd);
+  box-shadow:0 0 16px rgba(0,229,255,0.4), 0 2px 0 rgba(255,255,255,0.25) inset;
+}
+.btn.solid:hover{box-shadow:0 0 26px rgba(0,229,255,0.6), 0 2px 0 rgba(255,255,255,0.3) inset; transform:translateY(-2px);}
+.btn.purple:hover{box-shadow:0 0 20px rgba(167,66,255,0.45);}
+.btn.danger:hover{box-shadow:0 0 20px rgba(255,84,104,0.4);}
+
+.card{
+  box-shadow:0 1px 0 rgba(255,255,255,0.05) inset, 0 20px 50px rgba(0,0,0,0.35);
+  transition:box-shadow .25s ease, border-color .25s ease;
+}
+.card::after{
+  content:''; position:absolute; top:0; left:0; right:0; height:45%;
+  background:linear-gradient(180deg, rgba(255,255,255,0.05), transparent);
+  pointer-events:none; clip-path:inherit;
+}
+.bootcamp-card:hover{box-shadow:0 1px 0 rgba(255,255,255,0.08) inset, 0 16px 40px rgba(0,229,255,0.16), 0 0 0 1px rgba(0,229,255,0.25);}
+
+.day-tab.active,.tab-btn.active{box-shadow:0 0 14px rgba(0,229,255,0.4);}
+.slot-chip.checked{box-shadow:0 0 12px rgba(0,229,255,0.25);}
+
+.footer-note{text-align:center; font-family:var(--font-mono); font-size:10.5px; color:var(--text-faint); padding:24px; letter-spacing:1px;}
+.breadcrumb{font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); margin-bottom:18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.breadcrumb a{color:var(--cyan); cursor:pointer; text-decoration:none;}
+.breadcrumb a:hover{text-decoration:underline;}
+
+.setup-banner{
+  background:rgba(255,176,32,0.08); border:1px solid rgba(255,176,32,0.35); color:#ffd899;
+  font-family:var(--font-mono); font-size:12px; padding:14px 18px; border-radius:10px; margin:0 auto 22px; max-width:1180px;
+}
+</style>
+</head>
+<body>
+
+<div id="bg-layer"></div>
+<div id="app"></div>
+<div id="toast-wrap"></div>
+
+<script>
+/* ============================================================================
+   CONFIG — EDIT THESE TWO THINGS
+   ============================================================================ */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB2GCGIAb4QbijcqYk9a5El4MAu3TGWOQE",
+  authDomain: "room-austrc.firebaseapp.com",
+  databaseURL: "https://room-austrc-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "room-austrc",
+  storageBucket: "room-austrc.firebasestorage.app",
+  messagingSenderId: "1046848783468",
+  appId: "1:1046848783468:web:d1725a5564383e4cee8449"
+};
+const ADMIN_PASSWORD = "092418";
+const CLUB_NAME = "AUST ROBOTICS CLUB";
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
+/* ============================================================================
+   FIREBASE INIT
+   ============================================================================ */
+let fbReady = false;
+try{
+  if(FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY"){
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbReady = true;
+  }
+}catch(e){ console.error(e); }
+const db = fbReady ? firebase.database() : null;
+
+/* ============================================================================
+   STATE
+   ============================================================================ */
+const state = {
+  view: "home",              // home | bootcampPublic | adminLogin | adminDashboard | mentorDashboard
+  bootcamps: {},              // live cache from firebase
+  currentBootcampId: null,
+  adminAuthed: localStorage.getItem("arc_admin") === "1",
+  adminTab: "bootcamps",      // bootcamps | mentors | roomRequests
+  adminBootcampView: null,    // bootcampId being managed
+  adminScheduleRoom: null,    // {bootcampId, roomId} admin editing live schedule
+  adminScheduleDay: DAYS[0],
+  mentor: JSON.parse(localStorage.getItem("arc_mentor") || "null"), // {bootcampId, mentorId, name, phone}
+  mentorTab: "check",         // check | update
+  mentorUpdateRoom: null,
+  mentorUpdateDay: DAYS[0],
+  mentorCheckDay: DAYS[0],
+  mentorCheckSlots: {},       // selected slot ids for search
+  publicBootcampMode: null,   // 'apply' | 'login' | null
+};
+
+function uid(){ return db.ref().push().key; }
+
+function toast(msg, type=""){
+  const el = document.createElement("div");
+  el.className = "toast" + (type ? " "+type : "");
+  el.textContent = msg;
+  document.getElementById("toast-wrap").appendChild(el);
+  setTimeout(()=>{ el.style.opacity="0"; el.style.transition="opacity .3s"; setTimeout(()=>el.remove(),300); }, 3200);
+}
+
+function navigate(view, opts={}){
+  state.view = view;
+  Object.assign(state, opts);
+  render();
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+/* ============================================================================
+   FIREBASE LIVE LISTENER
+   ============================================================================ */
+if(fbReady){
+  db.ref("bootcamps").on("value", snap=>{
+    state.bootcamps = snap.val() || {};
+    render();
+  });
+}
+
+/* ============================================================================
+   WRITE HELPERS
+   ============================================================================ */
+function addBootcamp(name, sessions){
+  const id = uid();
+  db.ref("bootcamps/"+id).set({ name, sessions: sessions || "", createdAt: Date.now(), rooms:{}, timeSlots:{}, schedule:{}, mentorRequests:{}, roomRequests:{} });
+  toast("Bootcamp created", "ok");
+}
+function deleteBootcamp(id){
+  if(!confirm("Delete this bootcamp and ALL its data (rooms, mentors, schedules)? This cannot be undone.")) return;
+  db.ref("bootcamps/"+id).remove();
+  toast("Bootcamp deleted", "ok");
+  navigate("adminDashboard", {adminTab:"bootcamps", adminBootcampView:null});
+}
+function addRoom(bootcampId, name){
+  const id = uid();
+  db.ref(`bootcamps/${bootcampId}/rooms/${id}`).set(name);
+  toast("Room added", "ok");
+}
+function deleteRoom(bootcampId, roomId){
+  if(!confirm("Delete this room and its schedule?")) return;
+  db.ref(`bootcamps/${bootcampId}/rooms/${roomId}`).remove();
+  db.ref(`bootcamps/${bootcampId}/schedule/${roomId}`).remove();
+  toast("Room deleted", "ok");
+}
+function addSlot(bootcampId, label){
+  const id = uid();
+  db.ref(`bootcamps/${bootcampId}/timeSlots/${id}`).set(label);
+  toast("Time slot added", "ok");
+}
+function deleteSlot(bootcampId, slotId){
+  if(!confirm("Delete this time slot?")) return;
+  db.ref(`bootcamps/${bootcampId}/timeSlots/${slotId}`).remove();
+  toast("Time slot deleted", "ok");
+}
+function applyMentor(bootcampId, name, phone, password){
+  const id = uid();
+  db.ref(`bootcamps/${bootcampId}/mentorRequests/${id}`).set({ name, phone, password, status:"pending", appliedAt: Date.now() });
+  toast("Application submitted — wait for admin approval", "ok");
+}
+function approveMentor(bootcampId, reqId){
+  db.ref(`bootcamps/${bootcampId}/mentorRequests/${reqId}/status`).set("approved");
+  toast("Mentor approved", "ok");
+}
+function rejectOrKickMentor(bootcampId, reqId){
+  if(!confirm("Remove this mentor / application?")) return;
+  db.ref(`bootcamps/${bootcampId}/mentorRequests/${reqId}`).remove();
+  toast("Removed", "ok");
+}
+function updateMentor(bootcampId, reqId, data){
+  db.ref(`bootcamps/${bootcampId}/mentorRequests/${reqId}`).update(data);
+  toast("Mentor updated", "ok");
+}
+function manualAddMentor(bootcampId, name, phone, password){
+  const id = uid();
+  db.ref(`bootcamps/${bootcampId}/mentorRequests/${id}`).set({ name, phone, password, status:"approved", appliedAt: Date.now() });
+  toast("Mentor added", "ok");
+}
+function submitRoomRequest(bootcampId, mentorId, mentorName, roomId, roomName, day, slotIds){
+  const id = uid();
+  db.ref(`bootcamps/${bootcampId}/roomRequests/${id}`).set({
+    mentorId, mentorName, roomId, roomName, day, slots: slotIds, status:"pending", submittedAt: Date.now()
+  });
+  toast("Room update submitted for admin approval", "ok");
+}
+function approveRoomRequest(bootcampId, reqId, req){
+  const slotObj = {};
+  (req.slots||[]).forEach(s=> slotObj[s]=true);
+  db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`).set(slotObj);
+  db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
+  toast("Room schedule activated", "ok");
+}
+function rejectRoomRequest(bootcampId, reqId){
+  db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
+  toast("Request rejected", "ok");
+}
+function adminSetSchedule(bootcampId, roomId, day, slotIds){
+  const slotObj = {};
+  slotIds.forEach(s=> slotObj[s]=true);
+  db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`).set(slotObj);
+  toast("Schedule saved", "ok");
+}
+
+/* ============================================================================
+   RENDER — utility
+   ============================================================================ */
+function esc(s){ return (s||"").toString().replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function entries(obj){ return obj ? Object.entries(obj) : []; }
+
+function topbar(){
+  const rightBtns = [];
+  if(state.mentor){
+    rightBtns.push(`<button class="btn purple sm" onclick="app_logoutMentor()">LOGOUT MENTOR</button>`);
+  }
+  if(state.adminAuthed){
+    rightBtns.push(`<button class="btn danger sm" onclick="app_logoutAdmin()">LOGOUT ADMIN</button>`);
+  }
+  if(!state.adminAuthed){
+    rightBtns.push(`<button class="btn ghost sm" onclick="navigate('adminLogin')">MASTER ADMIN</button>`);
+  }
+  return `
+  <div class="topbar">
+    <div class="brand" onclick="navigate('home')">
+      <div class="brand-logo"><img src="assets/logo.png" onerror="this.style.display='none'"></div>
+      <div class="brand-text"><b>${CLUB_NAME}</b><span>Bootcamp &amp; Room System</span></div>
+    </div>
+    <div class="top-actions">${rightBtns.join("")}</div>
+  </div>`;
+}
+
+function bannerBlock(){
+  return `<div class="banner-frame" id="banner-frame">
+    <img src="assets/banner.png" alt="${CLUB_NAME} banner" onerror="this.closest('#banner-frame').style.display='none'">
+  </div>`;
+}
+
+function setupBanner(){
+  if(fbReady) return "";
+  return `<div class="setup-banner">⚠ Firebase isn't configured yet. Open this file and fill in <b>FIREBASE_CONFIG</b> near the top of the &lt;script&gt; section, then reload.</div>`;
+}
+
+/* ============================================================================
+   RENDER — HOME
+   ============================================================================ */
+function renderHome(){
+  const list = entries(state.bootcamps);
+  return `
+  ${topbar()}
+  <div class="container">
+    ${setupBanner()}
+    <div class="hero">
+      <span class="eyebrow">// Bootcamp Control Center</span>
+      <h1>${CLUB_NAME}</h1>
+      <p>Select a bootcamp below to apply as a mentor or log in to manage rooms</p>
+    </div>
+    <div class="section-title">Active Bootcamps</div>
+    ${list.length ? `<div class="grid cols-3">
+      ${list.map(([id,b])=>`
+        <div class="card bootcamp-card" onclick="navigate('bootcampPublic',{currentBootcampId:'${id}', publicBootcampMode:null})">
+          <h3>${esc(b.name)}</h3>
+          <div class="meta">
+            ${b.sessions ? `<span>${esc(b.sessions)}</span>` : ``}
+            <span>${entries(b.rooms).length} rooms</span>
+            <span>${entries(b.mentorRequests).filter(([,m])=>m.status==='approved').length} mentors</span>
+          </div>
+        </div>`).join("")}
+    </div>` : `<div class="empty">No bootcamps yet. The master admin can add one from the dashboard.</div>`}
+  </div>
+  <div class="footer-note">AUST ROBOTICS CLUB — built for members, run on Firebase</div>
+  `;
+}
+
+/* ============================================================================
+   RENDER — PUBLIC BOOTCAMP PANEL (apply / mentor login)
+   ============================================================================ */
+function renderBootcampPublic(){
+  const b = state.bootcamps[state.currentBootcampId];
+  if(!b) return renderHome();
+  const mode = state.publicBootcampMode;
+
+  let body = `
+    <div class="grid cols-2" style="margin-top:8px;">
+      <div class="card" style="cursor:pointer;" onclick="navigate('bootcampPublic',{publicBootcampMode:'apply'})">
+        <h3 style="font-family:var(--font-display); font-size:16px; margin-bottom:8px;">Apply as a Mentor</h3>
+        <p style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">New here? Submit your name, phone &amp; a password. The admin will approve you.</p>
+      </div>
+      <div class="card" style="cursor:pointer;" onclick="navigate('bootcampPublic',{publicBootcampMode:'login'})">
+        <h3 style="font-family:var(--font-display); font-size:16px; margin-bottom:8px;">Mentor Login</h3>
+        <p style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim);">Already approved? Log in with your phone &amp; password to manage rooms.</p>
+      </div>
+    </div>`;
+
+  if(mode === "apply"){
+    body = `
+    <div class="card" style="max-width:440px; margin:0 auto;">
+      <h2 style="font-family:var(--font-display); font-size:17px; margin-bottom:18px;">Apply as Mentor — ${esc(b.name)}</h2>
+      <div class="field"><label>Full Name</label><input type="text" id="ap-name" placeholder="Your name"></div>
+      <div class="field"><label>Phone Number</label><input type="tel" id="ap-phone" placeholder="01XXXXXXXXX"></div>
+      <div class="field"><label>Password</label><input type="password" id="ap-pass" placeholder="Choose a password"></div>
+      <div class="form-actions">
+        <button class="btn solid" onclick="app_submitApply()">Submit Application</button>
+        <button class="btn ghost" onclick="navigate('bootcampPublic',{publicBootcampMode:null})">Back</button>
+      </div>
+    </div>`;
+  } else if(mode === "login"){
+    body = `
+    <div class="card" style="max-width:440px; margin:0 auto;">
+      <h2 style="font-family:var(--font-display); font-size:17px; margin-bottom:18px;">Mentor Login — ${esc(b.name)}</h2>
+      <div class="field"><label>Phone Number</label><input type="tel" id="lg-phone" placeholder="01XXXXXXXXX"></div>
+      <div class="field"><label>Password</label><input type="password" id="lg-pass" placeholder="Your password"></div>
+      <div class="form-actions">
+        <button class="btn solid" onclick="app_mentorLogin()">Log In</button>
+        <button class="btn ghost" onclick="navigate('bootcampPublic',{publicBootcampMode:null})">Back</button>
+      </div>
+    </div>`;
+  }
+
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="breadcrumb"><a onclick="navigate('home')">Home</a> / ${esc(b.name)}</div>
+    ${bannerBlock()}
+    <div class="section-title">${esc(b.name)}</div>
+    ${body}
+  </div>`;
+}
+
+function app_submitApply(){
+  const name = document.getElementById("ap-name").value.trim();
+  const phone = document.getElementById("ap-phone").value.trim();
+  const pass = document.getElementById("ap-pass").value;
+  if(!name || !phone || !pass){ toast("Fill in all fields", "err"); return; }
+  applyMentor(state.currentBootcampId, name, phone, pass);
+  navigate("bootcampPublic", {publicBootcampMode:null});
+}
+function app_mentorLogin(){
+  const phone = document.getElementById("lg-phone").value.trim();
+  const pass = document.getElementById("lg-pass").value;
+  const b = state.bootcamps[state.currentBootcampId];
+  const match = entries(b.mentorRequests).find(([id,m])=> m.phone===phone && m.password===pass && m.status==="approved");
+  if(!match){ toast("Invalid credentials or not yet approved", "err"); return; }
+  const [mentorId, m] = match;
+  state.mentor = { bootcampId: state.currentBootcampId, mentorId, name:m.name, phone:m.phone };
+  localStorage.setItem("arc_mentor", JSON.stringify(state.mentor));
+  navigate("mentorDashboard", {mentorTab:"check", mentorCheckSlots:{}});
+}
+function app_logoutMentor(){
+  state.mentor = null;
+  localStorage.removeItem("arc_mentor");
+  navigate("home");
+}
+
+/* ============================================================================
+   RENDER — ADMIN LOGIN
+   ============================================================================ */
+function renderAdminLogin(){
+  return `
+  ${topbar()}
+  <div class="center-wrap">
+    <div class="card auth-card">
+      <span class="eyebrow">Restricted Access</span>
+      <h2>Master Admin Login</h2>
+      <div class="field"><label>Password</label><input type="password" id="admin-pass" placeholder="••••••" onkeydown="if(event.key==='Enter')app_adminLogin()"></div>
+      <div class="form-actions" style="justify-content:center;">
+        <button class="btn solid" onclick="app_adminLogin()">Enter Dashboard</button>
+      </div>
+    </div>
+  </div>`;
+}
+function app_adminLogin(){
+  const val = document.getElementById("admin-pass").value;
+  if(val === ADMIN_PASSWORD){
+    state.adminAuthed = true;
+    localStorage.setItem("arc_admin","1");
+    navigate("adminDashboard", {adminTab:"bootcamps", adminBootcampView:null});
+  } else {
+    toast("Wrong password", "err");
+  }
+}
+function app_logoutAdmin(){
+  state.adminAuthed = false;
+  localStorage.removeItem("arc_admin");
+  navigate("home");
+}
+
+/* ============================================================================
+   RENDER — ADMIN DASHBOARD
+   ============================================================================ */
+function renderAdminDashboard(){
+  if(!state.adminAuthed) return renderAdminLogin();
+
+  if(state.adminScheduleRoom){
+    return renderAdminScheduleEditor();
+  }
+  if(state.adminBootcampView){
+    return renderAdminBootcampDetail();
+  }
+
+  const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"]];
+  let content = "";
+  if(state.adminTab === "bootcamps") content = renderAdminBootcampsTab();
+  if(state.adminTab === "mentors") content = renderAdminMentorsTab();
+  if(state.adminTab === "roomRequests") content = renderAdminRoomRequestsTab();
+
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="section-title">Master Admin Dashboard</div>
+    <div class="tabs">
+      ${tabs.map(([k,l])=>`<button class="tab-btn ${state.adminTab===k?'active':''}" onclick="navigate('adminDashboard',{adminTab:'${k}'})">${l}</button>`).join("")}
+    </div>
+    ${content}
+  </div>`;
+}
+
+function renderAdminBootcampsTab(){
+  const list = entries(state.bootcamps);
+  return `
+  <div class="card" style="margin-bottom:24px; max-width:520px;">
+    <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:14px;">Add Bootcamp</h3>
+    <div class="form-row">
+      <div class="field"><label>Bootcamp Name</label><input type="text" id="bc-name" placeholder="e.g. Robotics Bootcamp Fall 2026"></div>
+      <div class="field"><label>Session Info</label><input type="text" id="bc-sessions" placeholder="e.g. 6 sessions, every Fri &amp; Sat"></div>
+    </div>
+    <div class="form-actions"><button class="btn solid" onclick="app_addBootcamp()">Save Bootcamp</button></div>
+  </div>
+  ${list.length ? list.map(([id,b])=>`
+    <div class="list-item">
+      <div class="info"><b>${esc(b.name)}</b><div class="sub">${b.sessions?esc(b.sessions)+' · ':''}${entries(b.rooms).length} rooms · ${entries(b.mentorRequests).filter(([,m])=>m.status==='approved').length} mentors</div></div>
+      <div class="actions">
+        <button class="btn sm" onclick="navigate('adminDashboard',{adminBootcampView:'${id}'})">View</button>
+        <button class="btn danger sm" onclick="deleteBootcamp('${id}')">Delete</button>
+      </div>
+    </div>`).join("") : `<div class="empty">No bootcamps yet — add one above.</div>`}
+  `;
+}
+
+function app_addBootcamp(){
+  const name = document.getElementById("bc-name").value.trim();
+  const sessions = document.getElementById("bc-sessions").value;
+  if(!name){ toast("Enter a bootcamp name", "err"); return; }
+  addBootcamp(name, sessions);
+  document.getElementById("bc-name").value="";
+  document.getElementById("bc-sessions").value="";
+}
+
+function renderAdminBootcampDetail(){
+  const id = state.adminBootcampView;
+  const b = state.bootcamps[id];
+  if(!b) return renderAdminDashboard();
+  const rooms = entries(b.rooms);
+  const slots = entries(b.timeSlots);
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="breadcrumb"><a onclick="navigate('adminDashboard',{adminBootcampView:null})">Admin Dashboard</a> / ${esc(b.name)}</div>
+    <div class="section-title">${esc(b.name)}</div>
+
+    <div class="grid cols-2">
+      <div class="card">
+        <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Rooms</h3>
+        <div class="form-row">
+          <div class="field" style="flex:2;"><input type="text" id="room-name" placeholder="Room number, e.g. Room 405"></div>
+          <button class="btn solid sm" style="height:44px;" onclick="app_addRoom('${id}')">Add</button>
+        </div>
+        ${rooms.length ? rooms.map(([rid,rname])=>`
+          <div class="list-item">
+            <div class="info"><b>${esc(rname)}</b></div>
+            <div class="actions">
+              <button class="btn sm" onclick="navigate('adminDashboard',{adminScheduleRoom:{bootcampId:'${id}',roomId:'${rid}'}, adminScheduleDay:'${DAYS[0]}'})">Manage Schedule</button>
+              <button class="btn danger sm" onclick="deleteRoom('${id}','${rid}')">Delete</button>
+            </div>
+          </div>`).join("") : `<div class="empty">No rooms yet.</div>`}
+      </div>
+
+      <div class="card">
+        <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Time Slots</h3>
+        <div class="form-row">
+          <div class="field" style="flex:2;"><input type="text" id="slot-name" placeholder="e.g. 10:00 AM - 11:00 AM"></div>
+          <button class="btn solid sm" style="height:44px;" onclick="app_addSlot('${id}')">Add</button>
+        </div>
+        ${slots.length ? slots.map(([sid,sname])=>`
+          <div class="list-item">
+            <div class="info"><b>${esc(sname)}</b></div>
+            <div class="actions"><button class="btn danger sm" onclick="deleteSlot('${id}','${sid}')">Delete</button></div>
+          </div>`).join("") : `<div class="empty">No time slots yet.</div>`}
+      </div>
+    </div>
+  </div>`;
+}
+function app_addRoom(bootcampId){
+  const v = document.getElementById("room-name").value.trim();
+  if(!v){ toast("Enter a room number", "err"); return; }
+  addRoom(bootcampId, v);
+  document.getElementById("room-name").value="";
+}
+function app_addSlot(bootcampId){
+  const v = document.getElementById("slot-name").value.trim();
+  if(!v){ toast("Enter a time slot", "err"); return; }
+  addSlot(bootcampId, v);
+  document.getElementById("slot-name").value="";
+}
+
+function renderAdminScheduleEditor(){
+  const {bootcampId, roomId} = state.adminScheduleRoom;
+  const b = state.bootcamps[bootcampId];
+  if(!b) return renderAdminDashboard();
+  const roomName = b.rooms ? b.rooms[roomId] : null;
+  const day = state.adminScheduleDay;
+  const slots = entries(b.timeSlots);
+  const current = (b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {};
+
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="breadcrumb">
+      <a onclick="navigate('adminDashboard',{adminScheduleRoom:null, adminBootcampView:'${bootcampId}'})">${esc(b.name)}</a> / ${esc(roomName||"Room")}
+    </div>
+    <div class="section-title">Live Schedule — ${esc(roomName||"")}</div>
+    <div class="card">
+      <div class="day-tabs">
+        ${DAYS.map(d=>`<button class="day-tab ${d===day?'active':''}" onclick="navigate('adminDashboard',{adminScheduleDay:'${d}'})">${d}</button>`).join("")}
+      </div>
+      ${slots.length ? `
+      <div class="slot-grid" id="admin-slot-grid">
+        ${slots.map(([sid,sname])=>`
+          <label class="slot-chip ${current[sid]?'checked':''}" onclick="this.classList.toggle('checked')">
+            <input type="checkbox" data-slot="${sid}" ${current[sid]?'checked':''} onchange="this.closest('.slot-chip').classList.toggle('checked', this.checked)">
+            ${esc(sname)}
+          </label>`).join("")}
+      </div>
+      <div class="form-actions" style="margin-top:18px;">
+        <button class="btn solid" onclick="app_adminSaveSchedule('${bootcampId}','${roomId}','${day}')">Save ${day}</button>
+      </div>
+      ` : `<div class="empty">Add time slots to this bootcamp first.</div>`}
+    </div>
+  </div>`;
+}
+function app_adminSaveSchedule(bootcampId, roomId, day){
+  const checked = Array.from(document.querySelectorAll('#admin-slot-grid input[type=checkbox]:checked')).map(i=>i.dataset.slot);
+  adminSetSchedule(bootcampId, roomId, day, checked);
+}
+
+function renderAdminMentorsTab(){
+  const rows = [];
+  entries(state.bootcamps).forEach(([bid,b])=>{
+    entries(b.mentorRequests).forEach(([mid,m])=> rows.push({bid, bname:b.name, mid, ...m}));
+  });
+  const running = rows.filter(r=>r.status==="approved");
+  const pending = rows.filter(r=>r.status==="pending");
+  const bootcampOptions = entries(state.bootcamps).map(([id,b])=>`<option value="${id}">${esc(b.name)}</option>`).join("");
+
+  return `
+  <div class="card" style="margin-bottom:24px; max-width:560px;">
+    <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:14px;">Manually Add Mentor</h3>
+    ${entries(state.bootcamps).length ? `
+    <div class="field"><label>Bootcamp</label><select id="mm-bootcamp">${bootcampOptions}</select></div>
+    <div class="form-row">
+      <div class="field"><label>Name</label><input type="text" id="mm-name"></div>
+      <div class="field"><label>Phone</label><input type="tel" id="mm-phone"></div>
+      <div class="field"><label>Password</label><input type="password" id="mm-pass"></div>
+    </div>
+    <div class="form-actions"><button class="btn solid" onclick="app_manualAddMentor()">Add Mentor (auto-approved)</button></div>
+    ` : `<div class="empty">Create a bootcamp first.</div>`}
+  </div>
+
+  <h3 style="font-family:var(--font-display); font-size:14.5px; margin:20px 0 12px; color:var(--green);">Running Mentors</h3>
+  ${running.length ? running.map(r=>`
+    <div class="list-item">
+      <div class="info"><b>${esc(r.name)} <span class="tag approved">approved</span></b><div class="sub">${esc(r.phone)} · ${esc(r.bname)}</div></div>
+      <div class="actions">
+        <button class="btn sm" onclick="app_editMentorPrompt('${r.bid}','${r.mid}','${esc(r.name)}','${esc(r.phone)}')">Edit</button>
+        <button class="btn danger sm" onclick="rejectOrKickMentor('${r.bid}','${r.mid}')">Kick</button>
+      </div>
+    </div>`).join("") : `<div class="empty">No approved mentors yet.</div>`}
+
+  <h3 style="font-family:var(--font-display); font-size:14.5px; margin:24px 0 12px; color:var(--amber);">Requested Mentors</h3>
+  ${pending.length ? pending.map(r=>`
+    <div class="list-item">
+      <div class="info"><b>${esc(r.name)} <span class="tag pending">pending</span></b><div class="sub">${esc(r.phone)} · ${esc(r.bname)}</div></div>
+      <div class="actions">
+        <button class="btn solid sm" onclick="approveMentor('${r.bid}','${r.mid}')">Approve</button>
+        <button class="btn danger sm" onclick="rejectOrKickMentor('${r.bid}','${r.mid}')">Reject</button>
+      </div>
+    </div>`).join("") : `<div class="empty">No pending applications.</div>`}
+  `;
+}
+function app_manualAddMentor(){
+  const bootcampId = document.getElementById("mm-bootcamp").value;
+  const name = document.getElementById("mm-name").value.trim();
+  const phone = document.getElementById("mm-phone").value.trim();
+  const pass = document.getElementById("mm-pass").value;
+  if(!name || !phone || !pass){ toast("Fill all fields", "err"); return; }
+  manualAddMentor(bootcampId, name, phone, pass);
+  render();
+}
+function app_editMentorPrompt(bid, mid, curName, curPhone){
+  const name = prompt("Edit mentor name:", curName);
+  if(name===null) return;
+  const phone = prompt("Edit mentor phone:", curPhone);
+  if(phone===null) return;
+  const pass = prompt("Set a new password (leave blank to keep unchanged):", "");
+  const data = {name, phone};
+  if(pass) data.password = pass;
+  updateMentor(bid, mid, data);
+}
+
+function renderAdminRoomRequestsTab(){
+  const rows = [];
+  entries(state.bootcamps).forEach(([bid,b])=>{
+    entries(b.roomRequests).forEach(([rid,r])=> rows.push({bid, bname:b.name, rid, ...r}));
+  });
+  return rows.length ? rows.map(r=>{
+    const slotNames = (r.slots||[]).map(sid=> (state.bootcamps[r.bid].timeSlots||{})[sid] || sid);
+    return `
+    <div class="list-item" style="align-items:flex-start;">
+      <div class="info">
+        <b>${esc(r.mentorName)} <span class="tag pending">pending</span></b>
+        <div class="sub">${esc(r.bname)} · ${esc(r.roomName)} · ${esc(r.day)}</div>
+        <div class="sub" style="margin-top:6px;">Slots: ${slotNames.map(esc).join(", ")}</div>
+      </div>
+      <div class="actions">
+        <button class="btn solid sm" onclick='approveRoomRequest("${r.bid}","${r.rid}", ${JSON.stringify({roomId:r.roomId, day:r.day, slots:r.slots}).replace(/'/g,"&#39;")})'>Approve</button>
+        <button class="btn danger sm" onclick="rejectRoomRequest('${r.bid}','${r.rid}')">Reject</button>
+      </div>
+    </div>`;
+  }).join("") : `<div class="empty">No room update requests right now.</div>`;
+}
+
+/* ============================================================================
+   RENDER — MENTOR DASHBOARD
+   ============================================================================ */
+function renderMentorDashboard(){
+  if(!state.mentor) return renderHome();
+  const b = state.bootcamps[state.mentor.bootcampId];
+  if(!b){ app_logoutMentor(); return renderHome(); }
+
+  const tabs = [["check","Room Check"],["update","Room Data Update"]];
+  let content = state.mentorTab === "check" ? renderMentorRoomCheck(b) : renderMentorRoomUpdate(b);
+
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="breadcrumb">${esc(b.name)} / Mentor: ${esc(state.mentor.name)}</div>
+    ${bannerBlock()}
+    <div class="section-title">Mentor Dashboard</div>
+    <div class="tabs">
+      ${tabs.map(([k,l])=>`<button class="tab-btn ${state.mentorTab===k?'active':''}" onclick="navigate('mentorDashboard',{mentorTab:'${k}', mentorCheckSlots:{}})">${l}</button>`).join("")}
+    </div>
+    ${content}
+  </div>`;
+}
+
+function renderMentorRoomCheck(b){
+  const slots = entries(b.timeSlots);
+  const rooms = entries(b.rooms);
+  const day = state.mentorCheckDay;
+
+  return `
+  <div class="card">
+    <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Find Free Rooms</h3>
+    <div class="day-tabs">
+      ${DAYS.map(d=>`<button class="day-tab ${d===day?'active':''}" onclick="navigate('mentorDashboard',{mentorCheckDay:'${d}'})">${d}</button>`).join("")}
+    </div>
+    ${slots.length ? `
+    <label style="margin-bottom:10px;">Select desired time slots</label>
+    <div class="slot-grid" id="check-slot-grid">
+      ${slots.map(([sid,sname])=>`
+        <label class="slot-chip ${state.mentorCheckSlots[sid]?'checked':''}" onclick="app_toggleCheckSlot('${sid}', this)">
+          <input type="checkbox" data-slot="${sid}" ${state.mentorCheckSlots[sid]?'checked':''} onclick="event.stopPropagation()" onchange="app_toggleCheckSlot('${sid}', this.closest('.slot-chip'))">
+          ${esc(sname)}
+        </label>`).join("")}
+    </div>
+    <div class="form-actions" style="margin-top:18px;">
+      <button class="btn solid" onclick="app_searchRooms()">Search Available Rooms</button>
+    </div>
+    <div id="check-results" style="margin-top:20px;"></div>
+    ` : `<div class="empty">No time slots configured for this bootcamp yet.</div>`}
+  </div>`;
+}
+function app_toggleCheckSlot(sid, el){
+  if(state.mentorCheckSlots[sid]) delete state.mentorCheckSlots[sid];
+  else state.mentorCheckSlots[sid] = true;
+  el.classList.toggle("checked", !!state.mentorCheckSlots[sid]);
+}
+function app_searchRooms(){
+  const b = state.bootcamps[state.mentor.bootcampId];
+  const day = state.mentorCheckDay;
+  const selected = Object.keys(state.mentorCheckSlots);
+  const resultsEl = document.getElementById("check-results");
+  if(!selected.length){ toast("Select at least one time slot", "err"); return; }
+
+  const rooms = entries(b.rooms);
+  const matches = [];
+  rooms.forEach(([rid,rname])=>{
+    const booked = (b.schedule && b.schedule[rid] && b.schedule[rid][day]) || {};
+    const free = selected.filter(sid => !booked[sid]);
+    if(free.length) matches.push({rid, rname, free});
+  });
+
+  if(!matches.length){
+    resultsEl.innerHTML = `<div class="empty">No rooms are free for the selected time slots on ${day}.</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(m=>`
+    <div class="result-room">
+      <h4>${esc(m.rname)} — ${m.free.length} match${m.free.length>1?'es':''}</h4>
+      <div class="slots">${m.free.map(sid=>`<span>${esc(b.timeSlots[sid])}</span>`).join("")}</div>
+    </div>`).join("");
+}
+
+function renderMentorRoomUpdate(b){
+  const rooms = entries(b.rooms);
+  const slots = entries(b.timeSlots);
+  const roomId = state.mentorUpdateRoom;
+  const day = state.mentorUpdateDay;
+  const current = roomId ? ((b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {}) : {};
+
+  return `
+  <div class="card">
+    <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Update Room Data</h3>
+    ${rooms.length ? `
+    <div class="field" style="max-width:320px;">
+      <label>Room</label>
+      <select id="mu-room" onchange="navigate('mentorDashboard',{mentorUpdateRoom:this.value})">
+        <option value="">— choose a room —</option>
+        ${rooms.map(([rid,rname])=>`<option value="${rid}" ${roomId===rid?'selected':''}>${esc(rname)}</option>`).join("")}
+      </select>
+    </div>
+    ${roomId ? `
+      <div class="day-tabs" style="margin-top:18px;">
+        ${DAYS.map(d=>`<button class="day-tab ${d===day?'active':''}" onclick="navigate('mentorDashboard',{mentorUpdateDay:'${d}'})">${d}</button>`).join("")}
+      </div>
+      ${slots.length ? `
+      <div class="slot-grid" id="update-slot-grid">
+        ${slots.map(([sid,sname])=>`
+          <label class="slot-chip ${current[sid]?'checked':''}" onclick="this.classList.toggle('checked')">
+            <input type="checkbox" data-slot="${sid}" ${current[sid]?'checked':''} onchange="this.closest('.slot-chip').classList.toggle('checked', this.checked)">
+            ${esc(sname)}
+          </label>`).join("")}
+      </div>
+      <p style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:12px;">
+        Marking a slot books this room for that time. Save sends it to the admin for approval — nothing goes live until approved.
+      </p>
+      <div class="form-actions" style="margin-top:14px;">
+        <button class="btn solid" onclick="app_submitRoomUpdate()">Save ${day}</button>
+      </div>
+      ` : `<div class="empty">No time slots configured yet.</div>`}
+    ` : ``}
+    ` : `<div class="empty">No rooms configured for this bootcamp yet.</div>`}
+  </div>`;
+}
+function app_submitRoomUpdate(){
+  const b = state.bootcamps[state.mentor.bootcampId];
+  const roomId = state.mentorUpdateRoom;
+  const day = state.mentorUpdateDay;
+  const roomName = b.rooms[roomId];
+  const checked = Array.from(document.querySelectorAll('#update-slot-grid input[type=checkbox]:checked')).map(i=>i.dataset.slot);
+  submitRoomRequest(state.mentor.bootcampId, state.mentor.mentorId, state.mentor.name, roomId, roomName, day, checked);
+}
+
+/* ============================================================================
+   MASTER RENDER
+   ============================================================================ */
+function render(){
+  const app = document.getElementById("app");
+  if(!fbReady && state.view !== "home" && state.view !== "adminLogin"){
+    app.innerHTML = topbar() + `<div class="container">${setupBanner()}<div class="empty">Configure Firebase first (see banner above / comments at the top of this file).</div></div>`;
+    return;
+  }
+  switch(state.view){
+    case "home": app.innerHTML = renderHome(); break;
+    case "bootcampPublic": app.innerHTML = renderBootcampPublic(); break;
+    case "adminLogin": app.innerHTML = renderAdminLogin(); break;
+    case "adminDashboard": app.innerHTML = renderAdminDashboard(); break;
+    case "mentorDashboard": app.innerHTML = renderMentorDashboard(); break;
+    default: app.innerHTML = renderHome();
+  }
+}
+
+/* boot */
+if(state.mentor) state.view = "mentorDashboard";
+render();
+</script>
+</body>
+</html>
