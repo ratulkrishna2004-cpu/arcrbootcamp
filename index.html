@@ -329,12 +329,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
 
 /* ---------- banner ---------- */
 .banner-frame{
-  position:relative; width:100%; border-radius:16px; overflow:hidden; margin-bottom:26px;
+  position:sticky; top:74px; z-index:15;
+  width:100%; border-radius:16px; overflow:hidden; margin-bottom:26px;
   border:1px solid var(--border);
   box-shadow:0 0 0 1px rgba(0,229,255,0.08), 0 0 34px rgba(0,229,255,0.22), 0 0 70px rgba(167,66,255,0.12);
   animation:bannerGlow 4s ease-in-out infinite;
+  transition:max-height .35s ease, box-shadow .35s ease;
+  max-height:600px;
 }
-.banner-frame img{width:100%; display:block; max-height:280px; object-fit:cover;}
+.banner-frame img{width:100%; display:block; height:auto; object-fit:contain;}
+.banner-frame.shutter{max-height:64px; box-shadow:0 0 0 1px rgba(0,229,255,0.15), 0 6px 20px rgba(0,0,0,0.4);}
 .banner-frame::after{
   content:''; position:absolute; inset:0; pointer-events:none;
   background:linear-gradient(180deg, rgba(0,229,255,0.08) 0%, transparent 30%, transparent 70%, rgba(2,3,5,0.5) 100%);
@@ -390,7 +394,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
 .day-tab.active,.tab-btn.active{box-shadow:0 0 14px rgba(0,229,255,0.4);}
 .slot-chip.checked{box-shadow:0 0 12px rgba(0,229,255,0.25);}
 
-.footer-note{text-align:center; font-family:var(--font-mono); font-size:10.5px; color:var(--text-faint); padding:24px; letter-spacing:1px;}
+.footer-note{
+  text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--cyan);
+  padding:26px; letter-spacing:1px; line-height:2;
+  text-shadow:0 0 6px rgba(0,229,255,0.55), 0 0 16px rgba(0,229,255,0.3);
+}
+.footer-note b{
+  color:#fff; font-weight:700;
+  text-shadow:0 0 8px rgba(255,255,255,0.6), 0 0 18px rgba(167,66,255,0.4);
+}
 .breadcrumb{font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); margin-bottom:18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
 .breadcrumb a{color:var(--cyan); cursor:pointer; text-decoration:none;}
 .breadcrumb a:hover{text-decoration:underline;}
@@ -470,9 +482,26 @@ function toast(msg, type=""){
 function navigate(view, opts={}){
   state.view = view;
   Object.assign(state, opts);
+  pushHistorySnapshot();
   render();
   window.scrollTo({top:0, behavior:"smooth"});
 }
+
+function pushHistorySnapshot(){
+  const snapshot = JSON.parse(JSON.stringify(state));
+  history.pushState({ snapshot }, "", "");
+}
+
+window.addEventListener("popstate", (e)=>{
+  if(e.state && e.state.snapshot){
+    Object.assign(state, e.state.snapshot);
+    render();
+    window.scrollTo({top:0, behavior:"smooth"});
+  } else {
+    state.view = "home";
+    render();
+  }
+});
 
 /* ============================================================================
    FIREBASE LIVE LISTENER
@@ -632,7 +661,7 @@ function renderHome(){
         </div>`).join("")}
     </div>` : `<div class="empty">No bootcamps yet. The master admin can add one from the dashboard.</div>`}
   </div>
-  <div class="footer-note">AUST ROBOTICS CLUB — built for members, run on Firebase</div>
+  
   `;
 }
 
@@ -933,9 +962,9 @@ function renderAdminMentorsTab(){
   <h3 style="font-family:var(--font-display); font-size:14.5px; margin:20px 0 12px; color:var(--green);">Running Mentors</h3>
   ${running.length ? running.map(r=>`
     <div class="list-item">
-      <div class="info"><b>${esc(r.name)} <span class="tag approved">approved</span></b><div class="sub">${esc(r.phone)} · ${esc(r.bname)}</div></div>
+      <div class="info"><b>${esc(r.name)} <span class="tag approved">approved</span></b><div class="sub">${esc(r.phone)} · Pass: ${esc(r.password)} · ${esc(r.bname)}</div></div>
       <div class="actions">
-        <button class="btn sm" onclick="app_editMentorPrompt('${r.bid}','${r.mid}','${esc(r.name)}','${esc(r.phone)}')">Edit</button>
+        <button class="btn sm" onclick="app_editMentorPrompt('${r.bid}','${r.mid}','${esc(r.name)}','${esc(r.phone)}','${esc(r.password)}')">Edit</button>
         <button class="btn danger sm" onclick="rejectOrKickMentor('${r.bid}','${r.mid}')">Kick</button>
       </div>
     </div>`).join("") : `<div class="empty">No approved mentors yet.</div>`}
@@ -943,8 +972,9 @@ function renderAdminMentorsTab(){
   <h3 style="font-family:var(--font-display); font-size:14.5px; margin:24px 0 12px; color:var(--amber);">Requested Mentors</h3>
   ${pending.length ? pending.map(r=>`
     <div class="list-item">
-      <div class="info"><b>${esc(r.name)} <span class="tag pending">pending</span></b><div class="sub">${esc(r.phone)} · ${esc(r.bname)}</div></div>
+      <div class="info"><b>${esc(r.name)} <span class="tag pending">pending</span></b><div class="sub">${esc(r.phone)} · Pass: ${esc(r.password)} · ${esc(r.bname)}</div></div>
       <div class="actions">
+        <button class="btn sm" onclick="app_editMentorPrompt('${r.bid}','${r.mid}','${esc(r.name)}','${esc(r.phone)}','${esc(r.password)}')">Edit</button>
         <button class="btn solid sm" onclick="approveMentor('${r.bid}','${r.mid}')">Approve</button>
         <button class="btn danger sm" onclick="rejectOrKickMentor('${r.bid}','${r.mid}')">Reject</button>
       </div>
@@ -960,14 +990,14 @@ function app_manualAddMentor(){
   manualAddMentor(bootcampId, name, phone, pass);
   render();
 }
-function app_editMentorPrompt(bid, mid, curName, curPhone){
+function app_editMentorPrompt(bid, mid, curName, curPhone, curPass){
   const name = prompt("Edit mentor name:", curName);
   if(name===null) return;
   const phone = prompt("Edit mentor phone:", curPhone);
   if(phone===null) return;
-  const pass = prompt("Set a new password (leave blank to keep unchanged):", "");
-  const data = {name, phone};
-  if(pass) data.password = pass;
+  const pass = prompt("Edit mentor password:", curPass || "");
+  if(pass===null) return;
+  const data = {name, phone, password: pass};
   updateMentor(bid, mid, data);
 }
 
@@ -1124,6 +1154,9 @@ function app_submitRoomUpdate(){
   const checked = Array.from(document.querySelectorAll('#update-slot-grid input[type=checkbox]:checked')).map(i=>i.dataset.slot);
   submitRoomRequest(state.mentor.bootcampId, state.mentor.mentorId, state.mentor.name, roomId, roomName, day, checked);
 }
+function footer(){
+  return `<div class="footer-note">AUST ROBOTICS CLUB — built for members<br><b>Developed by: Ratul Krishna Mojumder</b></div>`;
+}
 
 /* ============================================================================
    MASTER RENDER
@@ -1131,21 +1164,34 @@ function app_submitRoomUpdate(){
 function render(){
   const app = document.getElementById("app");
   if(!fbReady && state.view !== "home" && state.view !== "adminLogin"){
-    app.innerHTML = topbar() + `<div class="container">${setupBanner()}<div class="empty">Configure Firebase first (see banner above / comments at the top of this file).</div></div>`;
+    app.innerHTML = topbar() + `<div class="container">${setupBanner()}<div class="empty">Configure Firebase first (see banner above / comments at the top of this file).</div></div>` + footer();
     return;
   }
+  let content = "";
   switch(state.view){
-    case "home": app.innerHTML = renderHome(); break;
-    case "bootcampPublic": app.innerHTML = renderBootcampPublic(); break;
-    case "adminLogin": app.innerHTML = renderAdminLogin(); break;
-    case "adminDashboard": app.innerHTML = renderAdminDashboard(); break;
-    case "mentorDashboard": app.innerHTML = renderMentorDashboard(); break;
-    default: app.innerHTML = renderHome();
+    case "home": content = renderHome(); break;
+    case "bootcampPublic": content = renderBootcampPublic(); break;
+    case "adminLogin": content = renderAdminLogin(); break;
+    case "adminDashboard": content = renderAdminDashboard(); break;
+    case "mentorDashboard": content = renderMentorDashboard(); break;
+    default: content = renderHome();
   }
+  app.innerHTML = content + footer();
 }
+/* shutter effect on scroll for banner */
+window.addEventListener("scroll", ()=>{
+  const bf = document.getElementById("banner-frame");
+  if(!bf) return;
+  if(window.scrollY > 40){
+    bf.classList.add("shutter");
+  } else {
+    bf.classList.remove("shutter");
+  }
+});
 
 /* boot */
 if(state.mentor) state.view = "mentorDashboard";
+history.replaceState({ snapshot: JSON.parse(JSON.stringify(state)) }, "", "");
 render();
 </script>
 </body>
