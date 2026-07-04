@@ -615,13 +615,16 @@ function submitRoomRequest(bootcampId, mentorId, mentorName, roomId, roomName, d
 }
 function approveRoomRequest(bootcampId, reqId, req){
   const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`);
-  dayRef.once("value").then(snap=>{
-    const existing = snap.val() || {};
+  dayRef.transaction(currentData => {
+    const existing = currentData || {};
     (req.slots||[]).forEach(s=> existing[s] = req.mentorName || "Admin");
-    dayRef.set(existing).then(()=>{
-      db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
-      toast("Room schedule updated (merged with existing free slots)", "ok");
-    });
+    return existing;
+  }).then(()=>{
+    db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
+    toast("Room schedule updated (merged with existing free slots)", "ok");
+  }).catch(err=>{
+    console.error(err);
+    toast("Failed to update schedule — please try again", "err");
   });
 }
 function rejectRoomRequest(bootcampId, reqId){
@@ -629,12 +632,18 @@ function rejectRoomRequest(bootcampId, reqId){
   toast("Request rejected", "ok");
 }
 function adminSetSchedule(bootcampId, roomId, day, slotIds){
-  const b = state.bootcamps[bootcampId] || {};
-  const existing = (b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {};
-  const slotObj = {};
-  slotIds.forEach(s=> slotObj[s] = existing[s] || "Admin");
-  db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`).set(slotObj);
-  toast("Schedule saved", "ok");
+  const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`);
+  dayRef.transaction(currentData => {
+    const existing = currentData || {};
+    const slotObj = {};
+    slotIds.forEach(s=> slotObj[s] = existing[s] || "Admin");
+    return slotObj;
+  }).then(()=>{
+    toast("Schedule saved", "ok");
+  }).catch(err=>{
+    console.error(err);
+    toast("Failed to save schedule — please try again", "err");
+  });
 }
 function app_removeStatusSlot(bootcampId, roomId, day, slotId){
   if(!confirm("Remove this free slot entry?")) return;
