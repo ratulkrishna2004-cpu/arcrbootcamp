@@ -462,6 +462,7 @@ const db = fbReady ? firebase.database() : null;
 const state = {
   view: "home",              // home | bootcampPublic | adminLogin | adminDashboard | mentorDashboard
   bootcamps: {},              // live cache from firebase
+  dataLoaded: false,          // becomes true once first Firebase snapshot arrives
   template: { rooms:{}, timeSlots:{} },  // reusable rooms & slots across bootcamps
   currentBootcampId: null,
   adminAuthed: localStorage.getItem("arc_admin") === "1",
@@ -469,6 +470,8 @@ const state = {
   adminBootcampView: null,    // bootcampId being managed
   adminScheduleRoom: null,    // {bootcampId, roomId} admin editing live schedule
   adminScheduleDay: DAYS[0],
+  statusBootcampView: null,   // bootcampId being viewed in Room Status
+  statusDay: DAYS[0],
   mentor: JSON.parse(localStorage.getItem("arc_mentor") || "null"), // {bootcampId, mentorId, name, phone}
   mentorTab: "check",         // check | update
   mentorUpdateRoom: null,
@@ -518,6 +521,7 @@ window.addEventListener("popstate", (e)=>{
 if(fbReady){
   db.ref("bootcamps").on("value", snap=>{
     state.bootcamps = snap.val() || {};
+    state.dataLoaded = true;
     render();
   });
   db.ref("template").on("value", snap=>{
@@ -613,7 +617,7 @@ function approveRoomRequest(bootcampId, reqId, req){
   const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`);
   dayRef.once("value").then(snap=>{
     const existing = snap.val() || {};
-    (req.slots||[]).forEach(s=> existing[s] = true);
+    (req.slots||[]).forEach(s=> existing[s] = req.mentorName || "Admin");
     dayRef.set(existing).then(()=>{
       db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
       toast("Room schedule updated (merged with existing free slots)", "ok");
@@ -625,10 +629,21 @@ function rejectRoomRequest(bootcampId, reqId){
   toast("Request rejected", "ok");
 }
 function adminSetSchedule(bootcampId, roomId, day, slotIds){
+  const b = state.bootcamps[bootcampId] || {};
+  const existing = (b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {};
   const slotObj = {};
-  slotIds.forEach(s=> slotObj[s]=true);
+  slotIds.forEach(s=> slotObj[s] = existing[s] || "Admin");
   db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`).set(slotObj);
   toast("Schedule saved", "ok");
+}
+function app_removeStatusSlot(bootcampId, roomId, day, slotId){
+  if(!confirm("Remove this free slot entry?")) return;
+  db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}/${slotId}`).remove();
+  toast("Slot removed", "ok");
+}
+function app_saveStatusSlots(bootcampId, roomId, day){
+  const checked = Array.from(document.querySelectorAll(`#status-slot-grid-${roomId} input[type=checkbox]:checked`)).map(i=>i.dataset.slot);
+  adminSetSchedule(bootcampId, roomId, day, checked);
 }
 
 /* ============================================================================
@@ -833,15 +848,19 @@ function renderAdminDashboard(){
   if(state.adminScheduleRoom){
     return renderAdminScheduleEditor();
   }
+  if(state.statusBootcampView){
+    return renderAdminRoomStatusDetail();
+  }
   if(state.adminBootcampView){
     return renderAdminBootcampDetail();
   }
 
-  const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"]];
+  const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"],["roomStatus","Current Room Status"]];
   let content = "";
   if(state.adminTab === "bootcamps") content = renderAdminBootcampsTab();
   if(state.adminTab === "mentors") content = renderAdminMentorsTab();
   if(state.adminTab === "roomRequests") content = renderAdminRoomRequestsTab();
+  if(state.adminTab === "roomStatus") content = renderAdminRoomStatusTab();
 
   return `
   ${topbar()}
@@ -1054,6 +1073,66 @@ function app_editMentorPrompt(bid, mid, curName, curPhone, curPass){
   updateMentor(bid, mid, data);
 }
 
+function renderAdminRoomStatusTab(){
+  const list = entries(state.bootcamps);
+  return `
+  ${list.length ? list.map(([id,b])=>`
+    <div class="list-item" style="cursor:pointer;" onclick="navigate('adminDashboard',{statusBootcampView:'${id}', statusDay:'${DAYS[0]}'})">
+      <div class="info"><b>${esc(b.name)}</b><div class="sub">${entries(b.rooms).length} rooms</div></div>
+      <div class="actions"><button class="btn sm">View Status</button></div>
+    </div>`).join("") : `<div class="empty">No bootcamps yet.</div>`}
+  `;
+}
+
+function renderAdminRoomStatusDetail(){
+  const id = state.statusBootcampView;
+  const b = state.bootcamps[id];
+  if(!b) return renderAdminDashboard();
+  const day = state.statusDay || DAYS[0];
+  const rooms = entries(b.rooms);
+  const slots = entries(b.timeSlots);
+
+  return `
+  ${topbar()}
+  <div class="container">
+    <div class="breadcrumb"><a onclick="navigate('adminDashboard',{adminTab:'roomStatus', statusBootcampView:null})">Room Status</a> / ${esc(b.name)}</div>
+    <div class="section-title">Current Room Status — ${esc(b.name)}</div>
+    <div class="day-tabs">
+      ${DAYS.map(d=>`<button class="day-tab ${d===day?'active':''}" onclick="navigate('adminDashboard',{statusDay:'${d}'})">${d}</button>`).join("")}
+    </div>
+    ${rooms.length ? rooms.map(([rid,rname])=>{
+      const freeSlots = (b.schedule && b.schedule[rid] && b.schedule[rid][day]) || {};
+      const freeEntries = slots.filter(([sid])=> freeSlots[sid]);
+      return `
+      <div class="card" style="margin-bottom:18px;">
+        <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:12px;">${esc(rname)}</h3>
+        ${freeEntries.length ? freeEntries.map(([sid,sname])=>{
+          const who = (freeSlots[sid] === true) ? "Admin" : esc(freeSlots[sid]);
+          return `<div class="list-item">
+            <div class="info"><b>${esc(sname)}</b><div class="sub">Free — submitted by: ${who}</div></div>
+            <div class="actions"><button class="btn danger sm" onclick="app_removeStatusSlot('${id}','${rid}','${day}','${sid}')">Delete</button></div>
+          </div>`;
+        }).join("") : `<div class="empty">No free slots marked for ${day}.</div>`}
+        <details style="margin-top:14px;">
+          <summary style="cursor:pointer; font-family:var(--font-mono); font-size:11px; color:var(--cyan);">Edit / Add free slots for ${day}</summary>
+          ${slots.length ? `
+          <div class="slot-grid" id="status-slot-grid-${rid}" style="margin-top:12px;">
+            ${slots.map(([sid,sname])=>`
+              <label class="slot-chip ${freeSlots[sid]?'checked':''}" onclick="this.classList.toggle('checked')">
+                <input type="checkbox" data-slot="${sid}" ${freeSlots[sid]?'checked':''} onchange="this.closest('.slot-chip').classList.toggle('checked', this.checked)">
+                ${esc(sname)}
+              </label>`).join("")}
+          </div>
+          <div class="form-actions" style="margin-top:14px;">
+            <button class="btn solid sm" onclick="app_saveStatusSlots('${id}','${rid}','${day}')">Save Changes</button>
+          </div>
+          ` : `<div class="empty">No time slots configured.</div>`}
+        </details>
+      </div>`;
+    }).join("") : `<div class="empty">No rooms in this bootcamp.</div>`}
+  </div>`;
+}
+
 function renderAdminRoomRequestsTab(){
   const rows = [];
   entries(state.bootcamps).forEach(([bid,b])=>{
@@ -1069,7 +1148,7 @@ function renderAdminRoomRequestsTab(){
         <div class="sub" style="margin-top:6px;">Slots: ${slotNames.map(esc).join(", ")}</div>
       </div>
       <div class="actions">
-        <button class="btn solid sm" onclick='approveRoomRequest("${r.bid}","${r.rid}", ${JSON.stringify({roomId:r.roomId, day:r.day, slots:r.slots}).replace(/'/g,"&#39;")})'>Approve</button>
+        <button class="btn solid sm" onclick='approveRoomRequest("${r.bid}","${r.rid}", ${JSON.stringify({roomId:r.roomId, day:r.day, slots:r.slots, mentorName:r.mentorName}).replace(/'/g,"&#39;")})'>Approve</button>
         <button class="btn danger sm" onclick="rejectRoomRequest('${r.bid}','${r.rid}')">Reject</button>
       </div>
     </div>`;
@@ -1082,7 +1161,13 @@ function renderAdminRoomRequestsTab(){
 function renderMentorDashboard(){
   if(!state.mentor) return renderHome();
   const b = state.bootcamps[state.mentor.bootcampId];
-  if(!b){ app_logoutMentor(); return renderHome(); }
+  if(!b){
+    if(!state.dataLoaded){
+      return `${topbar()}<div class="container"><div class="empty">Loading your bootcamp data…</div></div>`;
+    }
+    app_logoutMentor();
+    return renderHome();
+  }
 
   const tabs = [["check","Room Check"],["update","Room Data Update"]];
   let content = state.mentorTab === "check" ? renderMentorRoomCheck(b) : renderMentorRoomUpdate(b);
@@ -1172,8 +1257,20 @@ function renderMentorRoomUpdate(b){
   const roomId = state.mentorUpdateRoom;
   const day = state.mentorUpdateDay;
   const current = roomId ? ((b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {}) : {};
+  const myPending = entries(b.roomRequests || {}).filter(([rid,r])=> r.mentorId === state.mentor.mentorId);
 
   return `
+  ${myPending.length ? `
+  <div class="card" style="margin-bottom:18px; border-color: rgba(255,176,32,0.4);">
+    <h3 style="font-family:var(--font-display); font-size:14px; margin-bottom:12px; color:var(--amber);">Your Pending Submissions (waiting for admin approval)</h3>
+    ${myPending.map(([rid,r])=>{
+      const slotNames = (r.slots||[]).map(sid=> (b.timeSlots||{})[sid] || sid);
+      return `<div class="list-item">
+        <div class="info"><b>${esc(r.roomName)} — ${esc(r.day)}</b><div class="sub">${slotNames.map(esc).join(", ")}</div></div>
+        <span class="tag pending">pending</span>
+      </div>`;
+    }).join("")}
+  </div>` : ``}
   <div class="card">
     <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Update Room Data</h3>
     ${rooms.length ? `
