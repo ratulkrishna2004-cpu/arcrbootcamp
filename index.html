@@ -610,11 +610,15 @@ function submitRoomRequest(bootcampId, mentorId, mentorName, roomId, roomName, d
   toast("Room update submitted for admin approval", "ok");
 }
 function approveRoomRequest(bootcampId, reqId, req){
-  const slotObj = {};
-  (req.slots||[]).forEach(s=> slotObj[s]=true);
-  db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`).set(slotObj);
-  db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
-  toast("Room schedule activated", "ok");
+  const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`);
+  dayRef.once("value").then(snap=>{
+    const existing = snap.val() || {};
+    (req.slots||[]).forEach(s=> existing[s] = true);
+    dayRef.set(existing).then(()=>{
+      db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
+      toast("Room schedule updated (merged with existing free slots)", "ok");
+    });
+  });
 }
 function rejectRoomRequest(bootcampId, reqId){
   db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
