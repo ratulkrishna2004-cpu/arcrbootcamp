@@ -614,13 +614,16 @@ function submitRoomRequest(bootcampId, mentorId, mentorName, roomId, roomName, d
   toast("Room update submitted for admin approval", "ok");
 }
 function approveRoomRequest(bootcampId, reqId, req){
-  const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`);
-  dayRef.transaction(currentData => {
-    const existing = currentData || {};
-    (req.slots||[]).forEach(s=> existing[s] = req.mentorName || "Admin");
-    return existing;
-  }).then(()=>{
-    db.ref(`bootcamps/${bootcampId}/roomRequests/${reqId}`).remove();
+  const b = state.bootcamps[bootcampId];
+  const existing = (b.schedule && b.schedule[req.roomId] && b.schedule[req.roomId][req.day]) || {};
+  const merged = {...existing};
+  (req.slots||[]).forEach(s=> merged[s] = req.mentorName || "Admin");
+
+  const updates = {};
+  updates[`bootcamps/${bootcampId}/schedule/${req.roomId}/${req.day}`] = merged;
+  updates[`bootcamps/${bootcampId}/roomRequests/${reqId}`] = null;
+
+  db.ref().update(updates).then(()=>{
     toast("Room schedule updated (merged with existing free slots)", "ok");
   }).catch(err=>{
     console.error(err);
@@ -632,13 +635,12 @@ function rejectRoomRequest(bootcampId, reqId){
   toast("Request rejected", "ok");
 }
 function adminSetSchedule(bootcampId, roomId, day, slotIds){
-  const dayRef = db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`);
-  dayRef.transaction(currentData => {
-    const existing = currentData || {};
-    const slotObj = {};
-    slotIds.forEach(s=> slotObj[s] = existing[s] || "Admin");
-    return slotObj;
-  }).then(()=>{
+  const b = state.bootcamps[bootcampId];
+  const existing = (b.schedule && b.schedule[roomId] && b.schedule[roomId][day]) || {};
+  const slotObj = {};
+  slotIds.forEach(s=> slotObj[s] = existing[s] || "Admin");
+
+  db.ref(`bootcamps/${bootcampId}/schedule/${roomId}/${day}`).set(slotObj).then(()=>{
     toast("Schedule saved", "ok");
   }).catch(err=>{
     console.error(err);
