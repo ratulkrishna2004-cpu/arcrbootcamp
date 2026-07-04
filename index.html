@@ -658,7 +658,7 @@ function topbar(){
     rightBtns.push(`<button class="btn purple sm" onclick="app_logoutMentor()">LOGOUT MENTOR</button>`);
   }
   if(state.adminAuthed){
-    rightBtns.push(`<button class="btn ghost sm" onclick="navigate('adminDashboard',{adminTab:'bootcamps', adminBootcampView:null, adminScheduleRoom:null})">DASHBOARD</button>`);
+    rightBtns.push(`<button class="btn ghost sm" onclick="navigate('adminDashboard',{adminTab:'bootcamps', adminBootcampView:null, adminScheduleRoom:null, statusBootcampView:null})">DASHBOARD</button>`);
     rightBtns.push(`<button class="btn danger sm" onclick="app_logoutAdmin()">LOGOUT ADMIN</button>`);
   }
   if(!state.adminAuthed){
