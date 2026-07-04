@@ -1002,10 +1002,10 @@ function renderAdminScheduleEditor(){
       ${slots.length ? `
       <div class="slot-grid" id="admin-slot-grid">
         ${slots.map(([sid,sname])=>`
-          <label class="slot-chip ${current[sid]?'checked':''}" onclick="this.classList.toggle('checked')">
-            <input type="checkbox" data-slot="${sid}" ${current[sid]?'checked':''} onchange="this.closest('.slot-chip').classList.toggle('checked', this.checked)">
-            ${esc(sname)}
-          </label>`).join("")}
+        <label class="slot-chip ${state.mentorCheckSlots[sid]?'checked':''}">
+          <input type="checkbox" data-slot="${sid}" ${state.mentorCheckSlots[sid]?'checked':''} onchange="app_toggleCheckSlot('${sid}', this.closest('.slot-chip'))">
+          ${esc(sname)}
+        </label>`).join("")}
       </div>
       <div class="form-actions" style="margin-top:18px;">
         <button class="btn solid" onclick="app_adminSaveSchedule('${bootcampId}','${roomId}','${day}')">Save ${day}</button>
