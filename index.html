@@ -959,6 +959,9 @@ function renderAdminScheduleEditor(){
     </div>
     <div class="section-title">Live Schedule — ${esc(roomName||"")}</div>
     <div class="card">
+      <p style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-bottom:14px;">
+        Check a slot to mark this room as FREE / available at that time. Unchecked slots are treated as busy/unavailable.
+      </p>
       <div class="day-tabs">
         ${DAYS.map(d=>`<button class="day-tab ${d===day?'active':''}" onclick="navigate('adminDashboard',{adminScheduleDay:'${d}'})">${d}</button>`).join("")}
       </div>
@@ -1143,8 +1146,8 @@ function app_searchRooms(){
   const rooms = entries(b.rooms);
   const matches = [];
   rooms.forEach(([rid,rname])=>{
-    const booked = (b.schedule && b.schedule[rid] && b.schedule[rid][day]) || {};
-    const free = selected.filter(sid => !booked[sid]);
+    const freeSlots = (b.schedule && b.schedule[rid] && b.schedule[rid][day]) || {};
+    const free = selected.filter(sid => freeSlots[sid]);
     if(free.length) matches.push({rid, rname, free});
   });
 
@@ -1190,7 +1193,7 @@ function renderMentorRoomUpdate(b){
           </label>`).join("")}
       </div>
       <p style="font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:12px;">
-        Marking a slot books this room for that time. Save sends it to the admin for approval — nothing goes live until approved.
+        Marking a slot means this room is FREE / available at that time. Save sends it to the admin for approval — nothing goes live until approved.
       </p>
       <div class="form-actions" style="margin-top:14px;">
         <button class="btn solid" onclick="app_submitRoomUpdate()">Save ${day}</button>
