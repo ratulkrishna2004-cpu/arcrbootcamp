@@ -1211,8 +1211,8 @@ function renderMentorRoomCheck(b){
     <label style="margin-bottom:10px;">Select desired time slots</label>
     <div class="slot-grid" id="check-slot-grid">
       ${slots.map(([sid,sname])=>`
-        <label class="slot-chip ${state.mentorCheckSlots[sid]?'checked':''}" onclick="app_toggleCheckSlot('${sid}', this)">
-          <input type="checkbox" data-slot="${sid}" ${state.mentorCheckSlots[sid]?'checked':''} onclick="event.stopPropagation()" onchange="app_toggleCheckSlot('${sid}', this.closest('.slot-chip'))">
+        <label class="slot-chip ${state.mentorCheckSlots[sid]?'checked':''}">
+          <input type="checkbox" data-slot="${sid}" ${state.mentorCheckSlots[sid]?'checked':''} onchange="app_toggleCheckSlot('${sid}', this.closest('.slot-chip'))">
           ${esc(sname)}
         </label>`).join("")}
     </div>
