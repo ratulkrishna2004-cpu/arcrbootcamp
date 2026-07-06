@@ -466,6 +466,7 @@ const state = {
   template: { rooms:{}, timeSlots:{} },  // reusable rooms & slots across bootcamps
   currentBootcampId: null,
   adminAuthed: localStorage.getItem("arc_admin") === "1",
+  adminPasswordUsed: localStorage.getItem("arc_admin_pass") || null,
   adminTab: "bootcamps",      // bootcamps | mentors | roomRequests
   adminBootcampView: null,    // bootcampId being managed
   adminScheduleRoom: null,    // {bootcampId, roomId} admin editing live schedule
@@ -479,6 +480,7 @@ const state = {
   mentorCheckDay: DAYS[0],
   mentorCheckSlots: {},       // selected slot ids for search
   publicBootcampMode: null,   // 'apply' | 'login' | null
+  loginLogs: { mentors:{}, admins:{} },
 };
 
 function uid(){ return db.ref().push().key; }
@@ -526,6 +528,10 @@ if(fbReady){
   });
   db.ref("template").on("value", snap=>{
     state.template = snap.val() || { rooms:{}, timeSlots:{} };
+    render();
+  });
+  db.ref("loginLogs").on("value", snap=>{
+    state.loginLogs = snap.val() || { mentors:{}, admins:{} };
     render();
   });
 }
@@ -606,6 +612,15 @@ function manualAddMentor(bootcampId, name, phone, password){
   db.ref(`bootcamps/${bootcampId}/mentorRequests/${id}`).set({ name, phone, password, status:"approved", appliedAt: Date.now() });
   toast("Mentor added", "ok");
 }
+function logMentorLogin(bootcampId, mentorName, phone){
+  const id = uid();
+  db.ref(`loginLogs/mentors/${id}`).set({ bootcampId, mentorName, phone, time: Date.now() });
+}
+function logAdminLogin(passwordUsed){
+  const id = uid();
+  db.ref(`loginLogs/admins/${id}`).set({ passwordUsed, time: Date.now() });
+}
+
 function submitRoomRequest(bootcampId, mentorId, mentorName, roomId, roomName, day, slotIds){
   const id = uid();
   db.ref(`bootcamps/${bootcampId}/roomRequests/${id}`).set({
@@ -809,6 +824,7 @@ function app_mentorLogin(){
   const [mentorId, m] = match;
   state.mentor = { bootcampId: state.currentBootcampId, mentorId, name:m.name, phone:m.phone };
   localStorage.setItem("arc_mentor", JSON.stringify(state.mentor));
+  logMentorLogin(state.currentBootcampId, m.name, m.phone);
   navigate("mentorDashboard", {mentorTab:"check", mentorCheckSlots:{}});
 }
 function app_logoutMentor(){
@@ -838,7 +854,10 @@ function app_adminLogin(){
   const val = document.getElementById("admin-pass").value;
   if(ADMIN_PASSWORD.includes(val)){
     state.adminAuthed = true;
+    state.adminPasswordUsed = val;
     localStorage.setItem("arc_admin","1");
+    localStorage.setItem("arc_admin_pass", val);
+    logAdminLogin(val);
     navigate("adminDashboard", {adminTab:"bootcamps", adminBootcampView:null});
   } else {
     toast("Wrong password", "err");
@@ -846,7 +865,9 @@ function app_adminLogin(){
 }
 function app_logoutAdmin(){
   state.adminAuthed = false;
+  state.adminPasswordUsed = null;
   localStorage.removeItem("arc_admin");
+  localStorage.removeItem("arc_admin_pass");
   navigate("home");
 }
 
@@ -867,11 +888,15 @@ function renderAdminDashboard(){
   }
 
   const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"],["roomStatus","Current Room Status"]];
+  if(state.adminPasswordUsed === "092418"){
+    tabs.push(["loginStatus","Log in Status"]);
+  }
   let content = "";
   if(state.adminTab === "bootcamps") content = renderAdminBootcampsTab();
   if(state.adminTab === "mentors") content = renderAdminMentorsTab();
   if(state.adminTab === "roomRequests") content = renderAdminRoomRequestsTab();
   if(state.adminTab === "roomStatus") content = renderAdminRoomStatusTab();
+  if(state.adminTab === "loginStatus") content = renderAdminLoginStatusTab();
 
   return `
   ${topbar()}
@@ -1142,6 +1167,29 @@ function renderAdminRoomStatusDetail(){
       </div>`;
     }).join("") : `<div class="empty">No rooms in this bootcamp.</div>`}
   </div>`;
+}
+
+function renderAdminLoginStatusTab(){
+  const logs = state.loginLogs || { mentors:{}, admins:{} };
+  const fmt = ts => new Date(ts).toLocaleString();
+  const mentorRows = entries(logs.mentors).map(([,l])=>l).sort((a,b)=> b.time - a.time);
+  const adminRows = entries(logs.admins).map(([,l])=>l).filter(l=> l.passwordUsed === "092418").sort((a,b)=> b.time - a.time);
+
+  return `
+  <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:12px; color:var(--cyan);">Mentor Logins</h3>
+  ${mentorRows.length ? mentorRows.map(l=>{
+    const bname = (state.bootcamps[l.bootcampId] && state.bootcamps[l.bootcampId].name) || "Unknown Bootcamp";
+    return `<div class="list-item">
+      <div class="info"><b>${esc(l.mentorName)}</b><div class="sub">${esc(bname)} · ${esc(l.phone)} · ${fmt(l.time)}</div></div>
+    </div>`;
+  }).join("") : `<div class="empty">No mentor logins recorded yet.</div>`}
+
+  <h3 style="font-family:var(--font-display); font-size:14.5px; margin:24px 0 12px; color:var(--purple);">Admin Logins</h3>
+  ${adminRows.length ? adminRows.map(l=>`
+    <div class="list-item">
+      <div class="info"><b>Password used: ${esc(l.passwordUsed)}</b><div class="sub">${fmt(l.time)}</div></div>
+    </div>`).join("") : `<div class="empty">No admin logins recorded yet.</div>`}
+  `;
 }
 
 function renderAdminRoomRequestsTab(){
