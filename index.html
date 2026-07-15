@@ -5,44 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AUST ROBOTICS CLUB | Bootcamp &amp; Room System</title>
 
-<!--
-  ============================================================================
-  AUST ROBOTICS CLUB — Bootcamp & Room Booking System
-  ============================================================================
-  SETUP (read this before deploying):
-
-  1. FIREBASE
-     - Create a Firebase project -> Build -> Realtime Database -> Create DB.
-     - Project settings -> General -> Add a Web App -> copy the config object
-       and paste it into FIREBASE_CONFIG below.
-     - Realtime Database -> Rules -> since this app has no Firebase Auth and
-       does its own password check in JS, use rules like:
-         {
-           "rules": { ".read": true, ".write": true }
-         }
-       This is fine for a small club tool, but anyone with the DB URL can
-       write to it. If you want it locked down harder later, add Firebase
-       Auth (e.g. Anonymous Auth) and rewrite the rules — ask Claude if you
-       want help with that upgrade.
-
-  2. ASSETS (put these in your GitHub repo, SAME FOLDER as this index.html —
-     no subfolder needed)
-       varsity-bg.jpg   -> background photo of AUST campus
-       logo.png         -> AUST Robotics Club logo (transparent PNG)
-       banner.png       -> banner shown to mentors on the bootcamp/apply
-                            page and on the mentor dashboard
-     If they're missing, the page still works (banner just won't show, bg
-     falls back to a dark gradient).
-
-  3. DEPLOY
-     - Push this repo to GitHub.
-     - Netlify -> Add new site -> Import from GitHub -> pick the repo ->
-       Deploy (no build command needed, publish directory = root).
-
-  4. MASTER ADMIN PASSWORD
-     - Set below in ADMIN_PASSWORD. Default is "092418" as requested.
-  ============================================================================
--->
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
