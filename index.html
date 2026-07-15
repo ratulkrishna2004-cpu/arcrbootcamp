@@ -440,7 +440,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1046848783468",
   appId: "1:1046848783468:web:d1725a5564383e4cee8449"
 };
-const ADMIN_PASSWORD = ["092418" , "Rafid", "Arib"];
+const ADMIN_PASSWORD = ["092418" , "Rafid" , "Arib"];
 const CLUB_NAME = "AUST ROBOTICS CLUB";
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
@@ -481,6 +481,9 @@ const state = {
   mentorCheckSlots: {},       // selected slot ids for search
   publicBootcampMode: null,   // 'apply' | 'login' | null
   loginLogs: { mentors:{}, admins:{} },
+  bookingModal: null,         // {bootcampId, roomId, roomName, day, date, slotIds, mentorId, mentorName}
+  lastSearchMatches: [],      // cache of last room-search results for the "Book This Room" buttons
+  editingBookingKey: null,    // booking key currently being date-edited on mentor's "Booking" tab
 };
 
 function uid(){ return db.ref().push().key; }
@@ -524,6 +527,7 @@ if(fbReady){
   db.ref("bootcamps").on("value", snap=>{
     state.bootcamps = snap.val() || {};
     state.dataLoaded = true;
+    entries(state.bootcamps).forEach(([bid,b])=> cleanupExpiredBookings(bid,b));
     render();
   });
   db.ref("template").on("value", snap=>{
@@ -546,7 +550,7 @@ function addBootcamp(name, sessions){
   db.ref("bootcamps/"+id).set({
     name, sessions: sessions || "", createdAt: Date.now(),
     rooms: templateRooms, timeSlots: templateSlots,
-    schedule:{}, mentorRequests:{}, roomRequests:{}
+    schedule:{}, mentorRequests:{}, roomRequests:{}, bookings:{}
   });
   toast("Bootcamp created — rooms & time slots auto-loaded", "ok");
 }
@@ -670,6 +674,83 @@ function app_removeStatusSlot(bootcampId, roomId, day, slotId){
 function app_saveStatusSlots(bootcampId, roomId, day){
   const checked = Array.from(document.querySelectorAll(`#status-slot-grid-${roomId} input[type=checkbox]:checked`)).map(i=>i.dataset.slot);
   adminSetSchedule(bootcampId, roomId, day, checked);
+}
+
+/* ============================================================================
+   BOOKINGS — room booking system (mentor books a specific room/date/slot)
+   One booking = one document, keyed deterministically as
+   "<roomId>__<date>__<slotId>" so double-booking the same room/date/slot
+   is impossible (a transaction refuses to overwrite an existing booking).
+   ============================================================================ */
+function bookingKey(roomId, date, slotId){
+  return `${roomId}__${date}__${slotId}`;
+}
+
+function nextDateForDay(dayName){
+  // Returns the next calendar date (YYYY-MM-DD) that falls on dayName (today counts).
+  const idx = DAYS.indexOf(dayName);
+  const d = new Date();
+  const cur = d.getDay();
+  let diff = idx - cur;
+  if(diff < 0) diff += 7;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0,10);
+}
+function dayOfWeekFromDate(dateStr){
+  const d = new Date(dateStr + "T00:00:00");
+  if(isNaN(d.getTime())) return null;
+  return DAYS[d.getDay()];
+}
+function parseSlotEndTime(slotName){
+  const matches = (slotName||"").match(/(\d{1,2}:\d{2}\s*[AaPp][Mm])/g);
+  if(!matches || !matches.length) return null;
+  const last = matches[matches.length-1];
+  const d = new Date("2000/01/01 " + last);
+  if(isNaN(d.getTime())) return null;
+  return { h: d.getHours(), m: d.getMinutes() };
+}
+function isBookingExpired(booking){
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0,10);
+  if(!booking || !booking.date) return true;
+  if(booking.date < todayStr) return true;
+  if(booking.date > todayStr) return false;
+  const end = parseSlotEndTime(booking.slotName || "");
+  if(!end) return false; // can't parse end time -> keep it live until the date itself passes
+  const nowMins = today.getHours()*60 + today.getMinutes();
+  const endMins = end.h*60 + end.m;
+  return nowMins >= endMins;
+}
+function cleanupExpiredBookings(bootcampId, b){
+  if(!b || !b.bookings) return;
+  Object.entries(b.bookings).forEach(([key, bk])=>{
+    if(isBookingExpired(bk)){
+      db.ref(`bootcamps/${bootcampId}/bookings/${key}`).remove();
+    }
+  });
+}
+function createBooking(bootcampId, roomId, roomName, date, day, slotId, slotName, mentorId, mentorName){
+  const key = bookingKey(roomId, date, slotId);
+  const ref = db.ref(`bootcamps/${bootcampId}/bookings/${key}`);
+  return ref.transaction(current=>{
+    if(current) return; // abort — already booked by someone
+    return { roomId, roomName, date, day, slotId, slotName, mentorId, mentorName, createdAt: Date.now() };
+  }).then(result=>{
+    if(!result.committed){
+      toast(`Already booked: ${slotName}`, "err");
+      return false;
+    }
+    return true;
+  }).catch(err=>{
+    console.error(err);
+    toast("Booking failed — try again", "err");
+    return false;
+  });
+}
+function cancelBooking(bootcampId, key){
+  if(!confirm("Cancel this booking?")) return;
+  db.ref(`bootcamps/${bootcampId}/bookings/${key}`).remove();
+  toast("Booking cancelled", "ok");
 }
 
 /* ============================================================================
@@ -887,7 +968,7 @@ function renderAdminDashboard(){
     return renderAdminBootcampDetail();
   }
 
-  const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"],["roomStatus","Current Room Status"]];
+  const tabs = [["bootcamps","Bootcamps"],["mentors","Mentors"],["roomRequests","Room Requests"],["roomStatus","Current Room Status"],["bookings","Bookings"]];
   if(state.adminPasswordUsed === "092418"){
     tabs.push(["loginStatus","Log in Status"]);
   }
@@ -896,6 +977,7 @@ function renderAdminDashboard(){
   if(state.adminTab === "mentors") content = renderAdminMentorsTab();
   if(state.adminTab === "roomRequests") content = renderAdminRoomRequestsTab();
   if(state.adminTab === "roomStatus") content = renderAdminRoomStatusTab();
+  if(state.adminTab === "bookings") content = renderAdminBookingsTab();
   if(state.adminTab === "loginStatus") content = renderAdminLoginStatusTab();
 
   return `
@@ -1192,6 +1274,71 @@ function renderAdminLoginStatusTab(){
   `;
 }
 
+function renderAdminBookingsTab(){
+  const rows = [];
+  entries(state.bootcamps).forEach(([bid,b])=>{
+    entries(b.bookings||{}).filter(([,bk])=> !isBookingExpired(bk)).forEach(([key,bk])=> rows.push({bid, bname:b.name, key, ...bk}));
+  });
+  rows.sort((a,c)=> a.date.localeCompare(c.date));
+  const bootcampOptions = entries(state.bootcamps).map(([id,b])=>`<option value="${id}">${esc(b.name)}</option>`).join("");
+
+  return `
+  <div class="card" style="margin-bottom:24px; max-width:640px;">
+    <h3 style="font-family:var(--font-display); font-size:15px; margin-bottom:14px;">Add Booking (Admin)</h3>
+    ${entries(state.bootcamps).length ? `
+    <div class="field"><label>Bootcamp</label><select id="ab-bootcamp" onchange="app_adminBookingBootcampChange()">${bootcampOptions}</select></div>
+    <div class="form-row">
+      <div class="field"><label>Room</label><select id="ab-room"></select></div>
+      <div class="field"><label>Mentor</label><select id="ab-mentor"></select></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Date</label><input type="date" id="ab-date"></div>
+      <div class="field"><label>Time Slot</label><select id="ab-slot"></select></div>
+    </div>
+    <div class="form-actions"><button class="btn solid" onclick="app_adminAddBooking()">Book</button></div>
+    ` : `<div class="empty">Create a bootcamp first.</div>`}
+  </div>
+
+  <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:12px;">All Active Bookings</h3>
+  ${rows.length ? rows.map(r=>`
+    <div class="list-item">
+      <div class="info"><b>${esc(r.roomName)} — ${esc(r.mentorName)}</b><div class="sub">${esc(r.bname)} · ${esc(r.date)} (${esc(r.day)}) · ${esc(r.slotName)}</div></div>
+      <div class="actions"><button class="btn danger sm" onclick="cancelBooking('${r.bid}','${r.key}')">Cancel</button></div>
+    </div>`).join("") : `<div class="empty">No active bookings right now.</div>`}
+  `;
+}
+function app_adminBookingBootcampChange(){
+  const bcSel = document.getElementById("ab-bootcamp");
+  if(!bcSel) return;
+  const bid = bcSel.value;
+  const b = state.bootcamps[bid];
+  if(!b) return;
+  const roomSel = document.getElementById("ab-room");
+  const mentorSel = document.getElementById("ab-mentor");
+  const slotSel = document.getElementById("ab-slot");
+  roomSel.innerHTML = entries(b.rooms).map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join("") || `<option value="">No rooms</option>`;
+  mentorSel.innerHTML = entries(b.mentorRequests).filter(([,m])=>m.status==='approved').map(([id,m])=>`<option value="${id}" data-name="${esc(m.name)}">${esc(m.name)}</option>`).join("") || `<option value="">No mentors</option>`;
+  slotSel.innerHTML = entries(b.timeSlots).map(([id,name])=>`<option value="${id}">${esc(name)}</option>`).join("") || `<option value="">No slots</option>`;
+}
+function app_adminAddBooking(){
+  const bid = document.getElementById("ab-bootcamp").value;
+  const b = state.bootcamps[bid];
+  const roomId = document.getElementById("ab-room").value;
+  const mentorSel = document.getElementById("ab-mentor");
+  const mentorId = mentorSel.value;
+  const mentorName = mentorSel.selectedOptions[0] ? mentorSel.selectedOptions[0].dataset.name : "Admin";
+  const date = document.getElementById("ab-date").value.trim();
+  const slotId = document.getElementById("ab-slot").value;
+  if(!roomId || !mentorId || !date || !slotId){ toast("Fill all fields", "err"); return; }
+  const day = dayOfWeekFromDate(date);
+  if(!day){ toast("Invalid date format — use YYYY-MM-DD", "err"); return; }
+  const roomName = b.rooms[roomId];
+  const slotName = b.timeSlots[slotId];
+  createBooking(bid, roomId, roomName, date, day, slotId, slotName, mentorId, mentorName).then(ok=>{
+    if(ok) toast("Booking added", "ok");
+  });
+}
+
 function renderAdminRoomRequestsTab(){
   const rows = [];
   entries(state.bootcamps).forEach(([bid,b])=>{
@@ -1228,8 +1375,10 @@ function renderMentorDashboard(){
     return renderHome();
   }
 
-  const tabs = [["check","Room Check"],["update","Room Data Update"]];
-  let content = state.mentorTab === "check" ? renderMentorRoomCheck(b) : renderMentorRoomUpdate(b);
+  const tabs = [["check","Room Check"],["update","Room Data Update"],["bookings","Booking"]];
+  let content = state.mentorTab === "check" ? renderMentorRoomCheck(b)
+    : state.mentorTab === "update" ? renderMentorRoomUpdate(b)
+    : renderMentorBookings(b);
 
   return `
   ${topbar()}
@@ -1238,7 +1387,7 @@ function renderMentorDashboard(){
     ${bannerBlock()}
     <div class="section-title">Mentor Dashboard</div>
     <div class="tabs">
-      ${tabs.map(([k,l])=>`<button class="tab-btn ${state.mentorTab===k?'active':''}" onclick="navigate('mentorDashboard',{mentorTab:'${k}', mentorCheckSlots:{}})">${l}</button>`).join("")}
+      ${tabs.map(([k,l])=>`<button class="tab-btn ${state.mentorTab===k?'active':''}" onclick="navigate('mentorDashboard',{mentorTab:'${k}', mentorCheckSlots:{}, editingBookingKey:null})">${l}</button>`).join("")}
     </div>
     ${content}
   </div>`;
@@ -1303,11 +1452,102 @@ function app_searchRooms(){
     resultsEl.innerHTML = `<div class="empty">No rooms are free for the selected time slots on ${day}.</div>`;
     return;
   }
-  resultsEl.innerHTML = matches.map(m=>`
+  state.lastSearchMatches = matches;
+  resultsEl.innerHTML = matches.map((m,idx)=>`
     <div class="result-room">
       <h4>${esc(m.rname)} — ${m.free.length} match${m.free.length>1?'es':''}</h4>
       <div class="slots">${m.free.map(sid=>`<span>${esc(b.timeSlots[sid])}</span>`).join("")}</div>
+      <div class="form-actions" style="margin-top:12px;">
+        <button class="btn solid sm" onclick="app_openBookingByIndex(${idx})">Book This Room</button>
+      </div>
     </div>`).join("");
+}
+function app_openBookingByIndex(idx){
+  const m = state.lastSearchMatches[idx];
+  if(!m || !state.mentor) return;
+  app_openBooking(m.rid, m.rname, m.free.slice());
+}
+function app_openBooking(roomId, roomName, slotIds){
+  state.bookingModal = {
+    bootcampId: state.mentor.bootcampId,
+    roomId, roomName,
+    day: state.mentorCheckDay,
+    date: nextDateForDay(state.mentorCheckDay),
+    slotIds,
+    mentorId: state.mentor.mentorId,
+    mentorName: state.mentor.name
+  };
+  render();
+}
+function app_closeBooking(){
+  state.bookingModal = null;
+  render();
+}
+function app_bookingDateChange(v){
+  if(!state.bookingModal) return;
+  state.bookingModal.date = v.trim();
+  render();
+}
+async function app_confirmBooking(){
+  const bm = state.bookingModal;
+  if(!bm) return;
+  const b = state.bootcamps[bm.bootcampId];
+  const actualDay = dayOfWeekFromDate(bm.date);
+  if(actualDay !== bm.day){
+    toast(`Date must fall on a ${bm.day}`, "err");
+    return;
+  }
+  const checked = Array.from(document.querySelectorAll('#booking-slot-grid input[type=checkbox]:checked')).map(i=>i.dataset.slot);
+  if(!checked.length){ toast("Select at least one slot", "err"); return; }
+  let successCount = 0;
+  for(const sid of checked){
+    const sname = (b.timeSlots||{})[sid] || sid;
+    const ok = await createBooking(bm.bootcampId, bm.roomId, bm.roomName, bm.date, bm.day, sid, sname, bm.mentorId, bm.mentorName);
+    if(ok) successCount++;
+  }
+  if(successCount) toast(`${successCount} slot(s) booked`, "ok");
+  state.bookingModal = null;
+  render();
+}
+function renderBookingModal(){
+  const bm = state.bookingModal;
+  if(!bm) return "";
+  const b = state.bootcamps[bm.bootcampId];
+  if(!b) return "";
+  const dateDayMatch = dayOfWeekFromDate(bm.date) === bm.day;
+  const slotDefs = b.timeSlots || {};
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this) app_closeBooking()">
+    <div class="modal">
+      <h2>Book Room — ${esc(bm.roomName)}</h2>
+      <div class="field"><label>Room</label><input type="text" value="${esc(bm.roomName)}" disabled></div>
+      <div class="field"><label>Day (fixed by your search)</label><input type="text" value="${esc(bm.day)}" disabled></div>
+      <div class="field">
+        <label>Date</label>
+        <input type="date" value="${esc(bm.date)}" onchange="app_bookingDateChange(this.value)">
+        ${!dateDayMatch ? `<div style="color:var(--red); font-family:var(--font-mono); font-size:11px; margin-top:6px;">This date is not a ${esc(bm.day)}. Please pick a ${esc(bm.day)} date.</div>` : ``}
+      </div>
+      <label style="margin-bottom:10px;">Time Slots</label>
+      <div class="slot-grid" id="booking-slot-grid">
+        ${bm.slotIds.map(sid=>{
+          const sname = slotDefs[sid] || sid;
+          const key = bookingKey(bm.roomId, bm.date, sid);
+          const existing = (b.bookings||{})[key];
+          const booked = !!existing;
+          const bookedByMe = booked && existing.mentorId === bm.mentorId;
+          const disabled = booked || !dateDayMatch;
+          return `<label class="slot-chip ${disabled?'locked':''}" style="${disabled?'cursor:not-allowed;':''}">
+            <input type="checkbox" data-slot="${sid}" ${disabled?'disabled':''}>
+            ${esc(sname)} ${booked ? `<span style="color:${bookedByMe?'var(--cyan)':'var(--red)'};font-size:10px;">(${bookedByMe?'your booking':'unavailable'})</span>` : ``}
+          </label>`;
+        }).join("")}
+      </div>
+      <div class="form-actions" style="margin-top:18px;">
+        <button class="btn solid" ${!dateDayMatch?'disabled':''} onclick="app_confirmBooking()">Book Now</button>
+        <button class="btn ghost" onclick="app_closeBooking()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 function renderMentorRoomUpdate(b){
@@ -1363,6 +1603,68 @@ function renderMentorRoomUpdate(b){
     ` : `<div class="empty">No rooms configured for this bootcamp yet.</div>`}
   </div>`;
 }
+function renderMentorBookings(b){
+  const allBookings = entries(b.bookings||{}).filter(([,bk])=> !isBookingExpired(bk));
+  const mine = allBookings.filter(([,bk])=> bk.mentorId===state.mentor.mentorId).sort((a,c)=> a[1].date.localeCompare(c[1].date));
+  const others = allBookings.filter(([,bk])=> bk.mentorId!==state.mentor.mentorId).sort((a,c)=> a[1].date.localeCompare(c[1].date));
+
+  return `
+  <div class="card" style="margin-bottom:20px;">
+    <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">My Bookings</h3>
+    ${mine.length ? mine.map(([key,bk])=>{
+      const editing = state.editingBookingKey === key;
+      return `
+      <div class="list-item" style="align-items:flex-start;">
+        <div class="info">
+          <b>${esc(bk.roomName)}</b>
+          <div class="sub">${esc(bk.date)} (${esc(bk.day)}) · ${esc(bk.slotName)}</div>
+          ${editing ? `
+          <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="date" id="edit-date-${key}" value="${esc(bk.date)}" style="max-width:170px;">
+            <button class="btn solid sm" onclick="app_saveEditBooking('${state.mentor.bootcampId}','${key}')">Save</button>
+            <button class="btn ghost sm" onclick="navigate('mentorDashboard',{editingBookingKey:null})">Cancel</button>
+          </div>` : ``}
+        </div>
+        <div class="actions">
+          ${!editing ? `<button class="btn sm" onclick="navigate('mentorDashboard',{editingBookingKey:'${key}'})">Edit Date</button>` : ``}
+          <button class="btn danger sm" onclick="cancelBooking('${state.mentor.bootcampId}','${key}')">Delete</button>
+        </div>
+      </div>`;
+    }).join("") : `<div class="empty">You have no active bookings.</div>`}
+  </div>
+
+  <div class="card">
+    <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Others' Booking</h3>
+    ${others.length ? others.map(([,bk])=>`
+      <div class="list-item">
+        <div class="info"><b>${esc(bk.roomName)} — ${esc(bk.mentorName)}</b><div class="sub">${esc(bk.date)} (${esc(bk.day)}) · ${esc(bk.slotName)}</div></div>
+      </div>`).join("") : `<div class="empty">No other active bookings right now.</div>`}
+  </div>`;
+}
+function app_saveEditBooking(bootcampId, oldKey){
+  const b = state.bootcamps[bootcampId];
+  const bk = b.bookings ? b.bookings[oldKey] : null;
+  if(!bk){ toast("Booking not found", "err"); return; }
+  const input = document.getElementById(`edit-date-${oldKey}`);
+  const newDate = input ? input.value : "";
+  if(!newDate){ toast("Pick a date", "err"); return; }
+  const newDay = dayOfWeekFromDate(newDate);
+  if(!newDay){ toast("Invalid date", "err"); return; }
+  const newKey = bookingKey(bk.roomId, newDate, bk.slotId);
+  if(newKey === oldKey){
+    state.editingBookingKey = null;
+    render();
+    return;
+  }
+  createBooking(bootcampId, bk.roomId, bk.roomName, newDate, newDay, bk.slotId, bk.slotName, bk.mentorId, bk.mentorName).then(ok=>{
+    if(ok){
+      db.ref(`bootcamps/${bootcampId}/bookings/${oldKey}`).remove();
+      toast("Booking date updated", "ok");
+      state.editingBookingKey = null;
+      render();
+    }
+  });
+}
 function app_submitRoomUpdate(){
   const b = state.bootcamps[state.mentor.bootcampId];
   const roomId = state.mentorUpdateRoom;
@@ -1393,9 +1695,12 @@ function render(){
     case "mentorDashboard": content = renderMentorDashboard(); break;
     default: content = renderHome();
   }
-  app.innerHTML = content + footer();
+  app.innerHTML = content + footer() + renderBookingModal();
   if(state.view === "mentorDashboard" && state.mentorTab === "check"){
     app_searchRooms();
+  }
+  if(state.view === "adminDashboard" && state.adminTab === "bookings" && !state.adminBootcampView && !state.statusBootcampView && !state.adminScheduleRoom){
+    app_adminBookingBootcampChange();
   }
 }
 
