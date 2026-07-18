@@ -305,6 +305,22 @@ input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:0 0
 @media(max-width:768px){
   .banner-frame{ display:block; }
 }
+/* ---------- bootcamp logo (shown at top when inside a bootcamp) ---------- */
+.bootcamp-logo{
+  display:flex; justify-content:center; align-items:center;
+  margin:6px auto 24px;
+}
+.bootcamp-logo img{
+  width:150px; height:150px; object-fit:contain;
+  border-radius:22px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid var(--border);
+  padding:10px;
+  filter:drop-shadow(0 0 22px rgba(0,229,255,0.4));
+}
+@media(max-width:600px){
+  .bootcamp-logo img{ width:110px; height:110px; }
+}
 
 /* ---------- splash screen (shows on every load / reload) ---------- */
 #splash-screen{
@@ -804,6 +820,11 @@ function topbar(){
     <div class="top-actions">${rightBtns.join("")}</div>
   </div>`;
 }
+function bootcampLogoBlock(){
+  return `<div class="bootcamp-logo">
+    <img src="bootcamp.png" alt="Bootcamp Logo" onerror="this.closest('.bootcamp-logo').style.display='none'">
+  </div>`;
+}
 
 function bannerBlock(){
   return `<div class="banner-frame" id="banner-frame">
@@ -907,6 +928,7 @@ function renderBootcampPublic(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb"><a onclick="navigate('home')">Home</a> / ${esc(b.name)}</div>
+    ${bootcampLogoBlock()}
     <div class="section-title">${esc(b.name)}</div>
     ${body}
   </div>`;
@@ -1056,13 +1078,14 @@ function renderAdminBootcampDetail(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb"><a onclick="navigate('adminDashboard',{adminBootcampView:null})">Admin Dashboard</a> / ${esc(b.name)}</div>
+    ${bootcampLogoBlock()}
     <div class="section-title">${esc(b.name)}</div>
 
     <div class="grid cols-2">
       <div class="card">
         <h3 style="font-family:var(--font-display); font-size:14.5px; margin-bottom:14px;">Rooms</h3>
         <div class="form-row">
-          <div class="field" style="flex:2;"><input type="text" id="room-name" placeholder="Room number, e.g. Room 405"></div>
+          <div class="field" style="flex:2;"><input type="text" id="room-name" placeholder="Room number, e.g. Room 405"></div>s
           <button class="btn solid sm" style="height:44px;" onclick="app_addRoom('${id}')">Add</button>
         </div>
         ${rooms.length ? rooms.map(([rid,rname])=>`
@@ -1408,6 +1431,7 @@ function renderMentorDashboard(){
   ${topbar()}
   <div class="container">
     <div class="breadcrumb">${esc(b.name)} / Mentor: ${esc(state.mentor.name)}</div>
+    ${bootcampLogoBlock()}
     ${bannerBlock()}
     <div class="section-title">Mentor Dashboard</div>
     <div class="tabs">
